@@ -1,0 +1,78 @@
+---------------------------------
+
+ Koha Migration Toolbox
+ Copyright 2010 ByWater Solutions
+
+---------------------------------
+
+The files in this repository are free software: you can redistribute 
+them and/or modify them under the terms of the GNU General Public 
+License as published by the Free Software Foundation, either version 
+3 of the License, or (at your option) any later version.
+
+These files are distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+---------------------------------
+
+1) Introduction
+
+    These scripts were written by or for ByWater Solutions, for use in 
+    migration and support of the Koha integrated library system.  We
+    give them to the community, in the hope that others find them 
+    useful.  Most should be fairly self-explanatory; if you have specific
+    questions, please direct them to ByWater via:
+    
+    D Ruth Bavousett <ruth@bywatersolutions.com>
+    Brendan Gallagher <brendan@bywatersolutions.com>
+
+2) Generalities
+
+    In all of the Perl scripts, Getopt::Long is used to process 
+    command-line parameters.  Immediately after the call to GetOptions,
+    mandatory parameters (if any) are checked.  No --help is provided in
+    these scripts.  Most will have something hanging from the --debug flag, 
+    but it may or may not be useful, depending on the debugging needs
+    when the script was written.
+
+    If a script is intended to change data on a running instance of Koha,
+    it will support the --update flag.  Without this flag, no data will 
+    be changed.
+
+3) Perl Prerequisites
+
+    The following modules are loaded for all or many of these scripts, so 
+    you should ensure that you have necessary packages on your system.
+
+    autodie qw(open close);
+    strict;
+    version;
+    warnings;
+
+    Carp;
+    Data::Dumper;
+    English qw( -no_match_vars );
+    Getopt::Long;
+    MARC::Batch;
+    MARC::Charset;
+    MARC::Field;
+    MARC::Record;
+    Readonly;
+    Smart::Comments;
+    Text::CSV_XS;
+    Text::CSV::Simple;
+    XML::Simple;
+
+4) Submitting patches
+
+    No one at ByWater suggests that these scripts are the be-all, end-all 
+    of ILS migration tools; if you have enhancements that you are willing to 
+    share, please send them, and we will include them!  A git patch would be
+    the most-welcome way to do that, emailed to either of the addresses above.
+
+
