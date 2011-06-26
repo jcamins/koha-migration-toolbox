@@ -39,7 +39,7 @@ if (($infile_name eq '') || ($table_name eq '')){
    exit;
 }
 
-my $csv=Text::CSV->new();
+my $csv=Text::CSV->new({ binary => 1 });
 my $dbh=C4::Context->dbh();
 my $j=0;
 my $exceptcount=0;
