@@ -130,6 +130,7 @@ while (my $line=$csv->getline($io)){
          }
       }
       if (($data[$i] ne "") && ($fields[$i] ne "suppress")){
+         $data[$i] =~ s/\"/\\"/g;
          $querystr .= '"'.$data[$i].'",';
       }
    }
