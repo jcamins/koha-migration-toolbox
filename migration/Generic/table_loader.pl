@@ -22,6 +22,7 @@ my $borrowercol = "XXX";
 my $itemcol = "YYY";
 my $bibliocol = "ZZZ";
 my $debug=0;
+my $doo_eet=0;
 
 GetOptions(
     'in=s'     => \$infile_name,
@@ -30,6 +31,7 @@ GetOptions(
     'item=s'   => \$itemcol,
     'bib=s'    => \$bibliocol,
     'debug'    => \$debug,
+    'update'   => \$doo_eet,
 );
 
 if (($infile_name eq '') || ($table_name eq '')){
@@ -37,16 +39,16 @@ if (($infile_name eq '') || ($table_name eq '')){
    exit;
 }
 
-my $csv=Text::CSV->new({ binary =>1, eol => $/});
+my $csv=Text::CSV->new();
 my $dbh=C4::Context->dbh();
 my $j=0;
 my $exceptcount=0;
-open my $io,"<","$infile_name" || die "$infile_name: $!";;
+open my $io,"<$infile_name";
 my $headerline = $csv->getline($io);
 my @fields=@$headerline;
 $debug and print Dumper(@fields);
 while (my $line=$csv->getline($io)){
-   $debug and last if ($j>0); 
+   $debug and last if ($j>3); 
    $j++;
    print ".";
    print "\r$j" unless ($j % 100);
@@ -136,7 +138,9 @@ while (my $line=$csv->getline($io)){
    $debug and print $querystr."\n";
    if (!$exception){
       my $sth = $dbh->prepare($querystr);
-      $sth->execute();
+      if ($doo_eet){
+        $sth->execute();
+      }
    }
    else {
       $exceptcount++;
