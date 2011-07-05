@@ -7,9 +7,9 @@ use Data::Dumper;
 my $dbh= C4::Context::dbh();
 
 my $sth=$dbh->prepare("ALTER TABLE circ_policies DROP FOREIGN KEY circ_policies_fk_1");
-#$sth->execute();
+$sth->execute();
 my $sth=$dbh->prepare("ALTER TABLE circ_policies DROP COLUMN branchcode");
-#$sth->execute();
+$sth->execute();
 my $sth=$dbh->prepare("DROP TABLE IF EXISTS issuingrules;");
 $sth->execute();
 

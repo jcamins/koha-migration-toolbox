@@ -40,4 +40,6 @@ update marc_subfield_structure set kohafield="items.coded_location_qualifier" wh
 
 update systempreferences set options='itemtypes|ccode' where variable = 'AdvancedSearchTypes';
 
+# Reserves
 
+update reserves set constrainttype="a" where constrainttype IS NULL;
