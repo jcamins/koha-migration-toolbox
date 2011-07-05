@@ -46,5 +46,5 @@ while (my $rec = $sth->fetchrow_hashref()){
    }
 }
 
-print "\n\n$i items edited.";
+print "\n\n$i items edited.\n";
 
