@@ -8,7 +8,12 @@ alter table items drop foreign key items_fk_4;    #key name changes some--refere
 alter table items drop key itemtype; 
 alter table items drop foreign key items_ibfk_4;
 alter table items change itemtype itype varchar(10) default null;
+
+--- One of these two will error out, but it'll end up doing the right thing
 alter table deleteditems change itemtype itype varchar(10) default null;
+alter table deleteditems create column itype varchar(10) default null;
+
+alter table marc_subfield_structure change column seealso seealso varchar(1100);
 update marc_subfield_structure set kohafield='items.itype' where kohafield='items.itemtype';
 insert into systempreferences (variable,value,explanation,type) values ("item-level_itypes",1,"If On, enabled Item-level Itemtype / Issuing Rules","YesNo");
 alter table itemtypes drop column replacement_price;
