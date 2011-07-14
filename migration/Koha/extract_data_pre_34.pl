@@ -615,7 +615,7 @@ while (my $prerow = $pre->fetchrow_hashref()){
 TAG952:
    foreach my $field ($marc->field("952")){
       next TAG952 if !$field->subfield('a');
-      if  ($field->subfield('a') ne $branch){
+      if  (($field->subfield('a') ne $branch) && ($branch ne "ALL")){
          $debug and print $prerow->{'biblionumber'};
          $debug and print Dumper($field);
          $marc->delete_field($field);
