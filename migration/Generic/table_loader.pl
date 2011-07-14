@@ -21,6 +21,7 @@ my $table_name = "";
 my $borrowercol = "XXX";
 my $itemcol = "YYY";
 my $bibliocol = "ZZZ";
+my $alternate = undef;
 my $debug=0;
 my $doo_eet=0;
 
@@ -28,6 +29,7 @@ GetOptions(
     'in=s'     => \$infile_name,
     'table=s'  => \$table_name,
     'borr=s'   => \$borrowercol,
+    'alt=s'    => \$alternate,
     'item=s'   => \$itemcol,
     'bib=s'    => \$bibliocol,
     'debug'    => \$debug,
@@ -87,11 +89,12 @@ while (my $line=$csv->getline($io)){
          my $convertq = $dbh->prepare("SELECT borrowernumber FROM borrowers WHERE cardnumber = '$data[$i]';");
          $convertq->execute();
          my $rec=$convertq->fetchrow_hashref();
-         if ($rec->{'borrowernumber'}){
-            $querystr .= $rec->{'borrowernumber'}.",";
+         my $borr=$rec->{'borrowernumber'} || $alternate;
+         if ($borr){
+            $querystr .= $borr.",";
          }
          else {
-            $exception = 1;
+            $exception = "No Borrower";
          }
          next;
       } 
@@ -103,7 +106,7 @@ while (my $line=$csv->getline($io)){
             $querystr .= $rec->{'biblionumber'}.",";
          }
          else {
-            $exception = 1;
+            $exception = "No Biblio";
          }
          next;
       } 
@@ -116,7 +119,7 @@ while (my $line=$csv->getline($io)){
                $querystr .= $rec->{'itemnumber'}.",";
             }
             else {
-               $exception = 1;
+               $exception = "No Item";
             }
             next;
          }
@@ -145,7 +148,7 @@ while (my $line=$csv->getline($io)){
    }
    else {
       $exceptcount++;
-      print "EXCEPTION:  \n";
+      print "EXCEPTION:  $exception\n";
       for (my $i=0;$i<scalar(@fields);$i++){
          print $fields[$i].":  ".$data[$i]."\n";
       }
