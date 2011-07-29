@@ -29,6 +29,8 @@ use C4::Members;
 $|=1;
 my $debug=0;
 
+no warnings 'uninitialized';
+
 my $infile_name = "";
 my $branch = "";
 my $branch_map_name = "";
@@ -45,6 +47,7 @@ my $patron_code_map_name = "";
 my %patron_code_map;
 my $tag_itypes_str = "";
 my %tag_itypes;
+my $frames_to_dump = "";
 my $skip_biblio = 0;
 
 GetOptions(
@@ -56,6 +59,7 @@ GetOptions(
     'patron_map=s'      => \$patron_map_name,
     'patron_code_map=s' => \$patron_code_map_name,
     'tag_itypes=s'      => \$tag_itypes_str,
+    'frameworks=s'      => \$frames_to_dump,
     'skip_biblio'       => \$skip_biblio,
     'debug'             => \$debug,
 );
@@ -285,6 +289,27 @@ while (my $row=$sth->fetchrow_hashref()){
 }
 close $out;
 print "\n$i records written\n";
+
+print "Dumping messages:\n";
+open $out,">messages_".$branch.".csv";
+$sth = $dbh->prepare("SELECT cardnumber,messages.branchcode,message_type,message_date,message
+                      FROM messages
+                      JOIN borrowers USING (borrowernumber)");
+$sth->execute();
+$i=0;
+print $out "cardnumber,branchcode,message_type,message_date,message\n";
+while (my $row=$sth->fetchrow_hashref()){
+   $i++;
+   print ".";
+   print "\r$i" unless ($i % 100);
+   print $out "$row->{'cardnumber'},$row->{'branchcode'},$row->{'message_type'},$row->{'message_date'},";
+   $row->{'message'} =~ s/\"/'/g;
+   print $out '"'.$row->{'message'}.'"';
+   print $out "\n";
+}
+close $out;
+print "\n$i records written\n";
+
 
 # 
 # HISTORICAL DATA SECTION
@@ -572,6 +597,97 @@ while (my $row = $sth->fetchrow_hashref()) {
 close $out;
 print "\n$i circulation rules written.\n";
 
+print "Dumping saved_sql reports:\n";
+open $out,">saved_sql_".$branch.".csv";
+$sth = $dbh->prepare("SELECT cardnumber,date_created,last_modified,last_run,type,report_name,notes,savedsql
+                      FROM saved_sql
+                      JOIN borrowers USING (borrowernumber)");
+$sth->execute();
+$i=0;
+print $out "cardnumber,date_created,last_modified,last_run,type,report_name,notes,savedsql\n";
+while (my $row = $sth->fetchrow_hashref()) {
+   $i++;
+   print ".";
+   print "\r$i" unless ($i % 100);
+   print $out "$row->{'cardnumber'},$row->{'date_created'},$row->{'last_modified'},$row->{'last_run'},$row->{'type'},";
+   $row->{'report_name'} =~ s/\"/'/g;
+   $row->{'notes'} =~ s/\"/'/g;
+   $row->{'savedsql'} =~ s/\"/\\\"/g;
+   print $out '"',$row->{'report_name'}.'",';
+   print $out '"',$row->{'notes'}.'",';
+   print $out '"',$row->{'savedsql'}.'"';
+   print $out "\n";
+}
+close $out;
+print "\n$i reports written.\n";
+
+print "Dumping framework codes:\n";
+open $out,">biblio_framework_".$branch.".csv";
+$sth = $dbh->prepare("SELECT * FROM biblio_framework");
+if ($frames_to_dump ne ""){
+   my @frames = split(/,/,$frames_to_dump);
+   foreach my $frame (@frames){
+      $frame = "'$frame'";
+   }
+   $frames_to_dump = join (',',@frames);
+   $sth= $dbh->prepare("SELECT * FROM biblio_framework WHERE frameworkcode IN ($frames_to_dump)");
+}
+
+$sth->execute();
+$i=0;
+print $out "frameworkcode,frameworktext\n";
+while (my $row = $sth->fetchrow_hashref()) {
+   $i++;
+   print ".";
+   print "\r$i" unless ($i % 100);
+   print $out "$row->{'frameworkcode'},$row->{'frameworktext'}\n";
+
+}
+close $out;
+print "\n$i framework codes written.\n";
+
+print "Dumping marc_tag_structure:\n";
+open $out,">marc_tag_structure_".$branch.".csv";
+$sth = $dbh->prepare("SELECT * FROM marc_tag_structure");
+if ($frames_to_dump ne ""){
+   $sth= $dbh->prepare("SELECT * FROM marc_tag_structure WHERE frameworkcode IN ($frames_to_dump)");
+}
+$sth->execute();
+$i=0;
+print $out "tagfield,liblibrarian,libopac,repeatable,mandatory,authorised_value,frameworkcode\n";
+while (my $row = $sth->fetchrow_hashref()) {
+   $i++;
+   print ".";
+   print "\r$i" unless ($i % 100);
+   print $out "$row->{'tagfield'},$row->{'liblibrarin'},$row->{'libopac'},$row->{'repeatable'},$row->{'mandatory'},";
+   print $out "$row->{'authorised_value'},$row->{'frameworkcode'}\n";
+}
+close $out;
+print "\n$i MARC tag definitions written.\n";
+
+print "Dumping marc_subfield_structure:\n";
+open $out,">marc_subfield_structure_".$branch.".csv";
+$sth = $dbh->prepare("SELECT * FROM marc_subfield_structure");
+if ($frames_to_dump ne ""){
+   $sth= $dbh->prepare("SELECT * FROM marc_subfield_structure WHERE frameworkcode IN ($frames_to_dump)");
+}
+$sth->execute();
+$i=0;
+print $out "tagfield,tagsubfield,liblibrarian,libopac,repeatable,mandatory,kohafield,tab,authorised_value,authtypecode,value_builder,isurl,hidden,frameworkcode,seealso,link,defaultvalue\n";
+while (my $row = $sth->fetchrow_hashref()) {
+   $i++;
+   print ".";
+   print "\r$i" unless ($i % 100);
+   print $out "$row->{'tagfield'},$row->{'tagsubfield'},$row->{'liblibrarin'},$row->{'libopac'},";
+   print $out "$row->{'repeatable'},$row->{'mandatory'},$row->{'kohafield'},$row->{'tab'},";
+   print $out "$row->{'authorised_value'},$row->{'authtypecode'},$row->{'value_builder'},$row->{'isurl'},";
+   print $out "$row->{'hidden'},$row->{'frameworkcode'},$row->{'seealso'},$row->{'link'},";
+   print $out "$row->{'defaultvalue'}\n";
+}
+close $out;
+print "\n$i MARC subfield definitions written.\n";
+
+#
 #
 #  BIBLIOGRAPHIC INFORMATION SECTION
 #
