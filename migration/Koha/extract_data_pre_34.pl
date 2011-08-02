@@ -659,7 +659,7 @@ while (my $row = $sth->fetchrow_hashref()) {
    $i++;
    print ".";
    print "\r$i" unless ($i % 100);
-   print $out "$row->{'tagfield'},$row->{'liblibrarin'},$row->{'libopac'},$row->{'repeatable'},$row->{'mandatory'},";
+   print $out "$row->{'tagfield'},".'"'."$row->{'liblibrarian'}".'","'."$row->{'libopac'}".'"'.",$row->{'repeatable'},$row->{'mandatory'},";
    print $out "$row->{'authorised_value'},$row->{'frameworkcode'}\n";
 }
 close $out;
@@ -678,10 +678,10 @@ while (my $row = $sth->fetchrow_hashref()) {
    $i++;
    print ".";
    print "\r$i" unless ($i % 100);
-   print $out "$row->{'tagfield'},$row->{'tagsubfield'},$row->{'liblibrarin'},$row->{'libopac'},";
+   print $out "$row->{'tagfield'},$row->{'tagsubfield'},".'"'."$row->{'liblibrarian'}".'","'."$row->{'libopac'}".'",';
    print $out "$row->{'repeatable'},$row->{'mandatory'},$row->{'kohafield'},$row->{'tab'},";
    print $out "$row->{'authorised_value'},$row->{'authtypecode'},$row->{'value_builder'},$row->{'isurl'},";
-   print $out "$row->{'hidden'},$row->{'frameworkcode'},$row->{'seealso'},$row->{'link'},";
+   print $out "$row->{'hidden'},$row->{'frameworkcode'},".'"'."$row->{'seealso'}".'"'.",$row->{'link'},";
    print $out "$row->{'defaultvalue'}\n";
 }
 close $out;
