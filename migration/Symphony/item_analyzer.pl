@@ -52,3 +52,5 @@ foreach my $kee (sort keys %quintmap){
    print {$outfl} "$kee:$quintmap{$kee}\n";
 }
 close $outfl;
+
+print "\n\n$i items read and analyzed.\n";
