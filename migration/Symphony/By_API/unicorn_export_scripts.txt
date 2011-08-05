@@ -2,7 +2,7 @@
 
 
 selcatalog | catalogdump -om -j -ka998 >biblios.mrc
-selitem -oNCBtlegyadfq | selcallnum -iN -oSpAZ >items.data
+selitem -oNCBtlegyadfq | selcallnum -iN -oSpnZ >items.data
 seluser | dumpflatuser >users.data
 selhold -jACTIVE | dumpflathold >holds.data
 selcharge | dumpflatcharge >charge.data
