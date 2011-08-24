@@ -48,8 +48,10 @@ my %location_map;
 my $item_triplet_map_name = "";
 my %item_triplet_map;
 my $drop_noitem=0;
+my $use_temps=0;
 my $drop_types_str = q{};
 my %drop_types;
+my $repl_price_override = q{};
 my $dump_copynums = 0;
 
 
@@ -67,6 +69,8 @@ GetOptions(
     'location_map=s'       => \$location_map_name,
     'item_trip_map=s'   => \$item_triplet_map_name,
     'dump_copynums=s'   => \$dump_copynums,
+    'repl_price=s'      => \$repl_price_override,
+    'use_temps'         => \$use_temps,
     'debug'   => \$debug,
 );
 
@@ -199,7 +203,7 @@ MATCH:
         $itemcount++;
         $csv->parse($match);
         my @columns = $csv->fields();
-        if (scalar(@columns) != 14){
+        if (scalar(@columns) != 16){
            print "\n$biblio_id\n$match\n";
            next MATCH;
         }
@@ -224,7 +228,9 @@ MATCH:
         }
 
         my $location = uc($columns[4]) || q{}; 
-        $debug and print "$read:  $columns[4] -- $location --";
+        if ($use_temps && ($columns[5] ne q{})){
+           $location = uc($columns[5])
+        }
         if (exists $location_map{$location}){
             $location = $location_map{$location};
         }
@@ -238,10 +244,10 @@ MATCH:
 
         my $enumchron = q{};
         if ($columns[5] ne $NULL_STRING){
-           $enumchron .= $columns[5];
+           $enumchron .= $columns[6];
         }
         if ($columns[6] ne $NULL_STRING){
-           $enumchron .= ' '.$columns[6];
+           $enumchron .= ' '.$columns[7];
            $enumchron =~ s/^ //;
         }
 
@@ -280,23 +286,33 @@ MATCH:
             $field->add_subfields( 'h' => $enumchron );
         }
 
-        if ($columns[7] ne $NULL_STRING){
-            $field->add_subfields( 'l' => $columns[7] );
+        if ($columns[8] ne $NULL_STRING){
+            $field->add_subfields( 'l' => $columns[8] );
         }
 
-        if ($columns[10] ne $NULL_STRING){
-            my $price = $columns[10] / 100;
+        if ($columns[11] ne $NULL_STRING){
+            my $price = $columns[11] / 100;
             $field->add_subfields( 'g' => $price );
-            $field->add_subfields( 'v' => $price );
+            if ($repl_price_override eq q{}){
+               $field->add_subfields( 'v' => $price );
+            }
         }
 
-        if ($columns[11] ne $NULL_STRING and 
+        if ($repl_price_override ne q{}){
+            $field->add_subfields( 'v' => $repl_price_override );
+        }
+
+        if ($columns[12] ne $NULL_STRING and 
             (!$dump_copynums || scalar(@matches) > $dump_copynums)){
-            $field->add_subfields( 't' => $columns[11] );
+            $field->add_subfields( 't' => $columns[12] );
         }
 
-        if ($columns[12] ne $NULL_STRING){
-            $field->add_subfields( 't' => $columns[12] );
+        if ($columns[13] ne '1'){
+            $field->add_subfields( '3' => $columns[13] );
+        }
+
+        if ($columns[14] ne $NULL_STRING){
+            $field->add_subfields( 't' => $columns[14] );
         }
 
         $record->append_fields($field);

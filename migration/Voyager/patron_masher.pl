@@ -25,6 +25,7 @@ my $addressfile = "";
 my $phonefile = "";
 my $statfile = "";
 my $barcodefile = "";
+my $categoryfile = "";
 my %patron_cat_map;
 my $branch_map_name = "";
 my %branch_map;
@@ -41,6 +42,7 @@ GetOptions(
     'address=s'     => \$addressfile,
     'phone=s'       => \$phonefile,
     'statfile=s'    => \$statfile,
+    'category=s'    => \$categoryfile,
     'barfile=s'     => \$barcodefile,
     'drop_codes=s'  => \$drop_code_str,
     'use_inst'      => \$use_inst_id,
@@ -48,7 +50,7 @@ GetOptions(
 );
 
 if (($infile_name eq '') || ($outfile_name eq '') || ($addressfile eq "") || ($phonefile eq "") || ($fixed_branch eq "")
-     || ($barcodefile eq q{})){
+     || ($barcodefile eq q{}) || ($categoryfile eq q{}) ){
   print "Something's missing.\n";
   exit;
 }
@@ -174,7 +176,6 @@ while (my $row=$csv_format->getline_hr($infl)){
    my @bar_matches = qx{grep "^$matchpoint," $barcodefile};
 BAR_MATCH:
    foreach my $match (@bar_matches){
-      print $match if $matchpoint == 1827;
       my $parser = Text::CSV->new();
       $parser->parse($match);
       my @row1=$parser->fields();
@@ -186,8 +187,15 @@ BAR_MATCH:
    }
    
    if ($thisrow{cardnumber} eq q{}){
-       $thisrow{cardnumber} = sprintf "TEMP%d",$matchpoint;
-       $no_barcode++;
+      $thisrow{cardnumber} = sprintf "TEMP%d",$matchpoint;
+      $no_barcode++;
+      my @category_matches = qx{grep "^$matchpoint," $categoryfile};
+      foreach my $match (@category_matches){
+         my $parser = Text::CSV->new();
+         $parser->parse($match);
+         my @row1=$parser->fields();
+         $thisrow{categorycode}  = uc $row1[3];
+      }
    }
 
    $thisrow{userid}        = $thisrow{cardnumber};

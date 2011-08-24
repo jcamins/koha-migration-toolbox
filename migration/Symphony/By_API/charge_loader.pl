@@ -92,6 +92,23 @@ while (my $line = readline($in)) {
 }
 
 close $in;
+#handle the last one!
+if (%thisissue){
+   $debug and print Dumper(%thisissue);
+   if ($thisissue{'borrowernumber'} && $thisissue{'itemnumber'}){
+      $j++;
+      $sth->execute($thisissue{'borrowernumber'},
+                    $thisissue{'itemnumber'},
+                    $thisissue{'duedate'},
+                    $thisissue{'issuedate'},
+                    $thisissue{'branchcode'});
+   }
+   else{
+      print "\nProblem record:\n";
+      print Dumper(%thisissue);
+      $problem++;
+   }
+}
 
 print "\n\n$i lines read.\n$j issues loaded.\n$problem problem issues not loaded.";
 exit;

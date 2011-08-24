@@ -8,3 +8,8 @@ selhold -jACTIVE | dumpflathold >holds.data
 selcharge | dumpflatcharge >charge.data
 selbill | dumpflatbill >bill.data
 selauthority | authdump | flatskip -aMARC -om >authorities.mrc
+selvendor |dumpflatvendor >vendor.data
+selvendor -oJm >vendorname.data
+selserctl |dumpflatserctl >serctl.data
+selcatalog |catalogdump -om -ka998 -lALL_LIBS >mhld.mrc
+selprediction |dumpflatissue >serissues.data

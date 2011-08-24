@@ -33,6 +33,7 @@ my %reasons;
 
 while (my $line = readline($in)) {
    chomp $line;
+   $line =~ s///g;
    $i++;
    print ".";
    print "\r$i" unless $i % 100;
