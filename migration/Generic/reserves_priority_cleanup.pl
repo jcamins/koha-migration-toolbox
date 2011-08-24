@@ -30,7 +30,8 @@ GetOptions(
 #}
 
 my $dbh=C4::Context->dbh();
-my $reserves_modified = 0;
+my $i=0;
+my $reserves_edited = 0;
 
 my $biblio_sth = $dbh->prepare("SELECT distinct(biblionumber) from reserves order by biblionumber");
 my $reserves_sth = $dbh->prepare("SELECT borrowernumber, reservedate, constrainttype FROM reserves
@@ -57,7 +58,7 @@ RESERVE:
    for (my $j = 0;$j < @priority;$j++) {
       $debug and print "Borrowernumber: $priority[$j]->{'borrowernumber'}   Date: $priority[$j]->{'reservedate'}\n";
       if ($doo_eet){
-         $sth->execute($j + 1, $biblio, $priority[$j]->{'borrowernumber'}, $priority[$j]->{'reservedate'});
+         $upd_sth->execute($j + 1, $biblio, $priority[$j]->{'borrowernumber'}, $priority[$j]->{'reservedate'});
       }
       $reserves_edited++;
    }
