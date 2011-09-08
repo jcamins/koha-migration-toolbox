@@ -50,8 +50,8 @@ my $i=0;
 my $written=0;
 
 my %thisrow;
-my @charge_fields= qw{ borrowerbar itembar   chargedate branchcode
-                       duedate     renewdate renewals };
+my @charge_fields= qw{ borrowerbar itembar   issuedate branchcode
+                       date_due     lastreneweddate renewals };
 
 
 open my $infl,"<$infile_name" || die ('problem opening $infile_name');
@@ -59,6 +59,7 @@ open my $outfl,">",$outfile_name || die ('problem opeining $outfile_name');
 for my $j (0..scalar(@charge_fields)-1){
    print $outfl $charge_fields[$j].',';
 }
+print $outfl "\n";
 
 LINE:
 while (my $line = readline($infl)){
@@ -86,14 +87,15 @@ while (my $line = readline($infl)){
    if ($line =~ /^  \w/){
       $line =~ m[ (\w+)\s+(\d+)\/(\d+)\/(\d+)\,];
       $thisrow{borrowerbar} = $1;
-      $thisrow{chargedate} = sprintf "%4d-%02d-%02d",$4,$2,$3;
+      $thisrow{issuedate} = sprintf "%4d-%02d-%02d",$4,$2,$3;
       next LINE;
    }
 
    if ($line =~ m[^(\d+)/(\d+)/(\d+),]){
-      $thisrow{duedate} = sprintf "%4d-%02d-%02d",$3,$1,$2;
+      $thisrow{date_due} = sprintf "%4d-%02d-%02d",$3,$1,$2;
+      $debug and print $thisrow{date_due};
       if ($line =~ m[ (\d+)/(\d+)/(\d+),\d+:\d+\s+(\d+)\s+]  ){
-         $thisrow{renewdate} = sprintf "%4d-%02d-%02d",$3,$1,$2;
+         $thisrow{lastreneweddate} = sprintf "%4d-%02d-%02d",$3,$1,$2;
          $thisrow{renewals}  = $4;
       }
       else{
@@ -120,6 +122,7 @@ while (my $line = readline($infl)){
                print $outfl '"'.$thisrow{$charge_fields[$j]}.'"';
             }
             else{
+               print "$charge_fields[$j] $thisrow{$charge_fields[$j]} \n";
                print $outfl $thisrow{$charge_fields[$j]};
             }
          }

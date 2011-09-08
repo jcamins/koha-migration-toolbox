@@ -115,7 +115,7 @@ exit;
 
 sub _process_date {
     my ($date_in) = @_;
-    return "" if ($date_in eq "NEVER");
+    return "2050-12-31" if ($date_in eq "NEVER");
     my $year = substr($date_in,0,4);
     my $month = substr($date_in,4,2);
     my $day = substr($date_in,6,2);

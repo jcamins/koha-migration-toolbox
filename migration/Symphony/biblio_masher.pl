@@ -134,14 +134,14 @@ my %callschemecount;
 while () {
    last if ($debug and $i > 99);
    my $record = $batch->next();
-   $i++;
-   print ".";
-   print "\r$i" unless $i % 100;
    if ($@){
       print "Bogusness skipped\n";
       next;
    }
    last unless ($record);
+   $i++;
+   print "." unless $i % 10;
+   print "\r$i" unless $i % 100;
 
    if (!$record->field("999")){
        $no_999++;

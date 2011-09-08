@@ -48,6 +48,7 @@ my $note;
 
 while (my $line = readline($in)) {
    chomp $line;
+   $line =~ s/$//;
    $i++;
    print ".";
    print "\r$i" unless $i % 100;
@@ -64,7 +65,7 @@ while (my $line = readline($in)) {
    $note = 0 if ($thistag);
    $note = 1 if (($thistag eq "NOTE") or ($thistag eq "COMMENT") or ($thistag eq "WEBCATPREF"));
    next if (($thistag eq "") && $note);
-   $line =~ /\|a(.*)/;
+   $line =~ /\|a(.*)/;
    my $content = $1;
    $profiles{$content}++ if ($thistag eq "USER_PROFILE");
    $libraries{$content}++ if ($thistag eq "USER_LIBRARY");

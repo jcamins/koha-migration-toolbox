@@ -25,6 +25,7 @@ my $branch_map_name = "";
 my %branch_map;
 my $mapfile_name = "";
 my %patron_cat_map;
+my $default_privacy = "";
 my $drop_code_str = "";
 my %drop_codes;
 
@@ -34,6 +35,7 @@ GetOptions(
     'map=s'         => \$mapfile_name,
     'branch=s'      => \$fixed_branch,
     'branch_map=s'  => \$branch_map_name,
+    'default_privacy=s' => \$default_privacy,
     'drop_codes=s'  => \$drop_code_str,
     'debug'         => \$debug,
 );
@@ -75,6 +77,9 @@ my %thisrow;
 my $addedcode;
 my %patron_categories;
 my %patron_branches;
+my %patron_cat1s;
+my %patron_cat2s;
+my %patron_cat3s;
 my %taggs;
 my $address_toggle=0;
 
@@ -108,7 +113,9 @@ my @borrower_fields = qw /cardnumber          surname
                           altcontactaddress1  altcontactaddress2 
                           altcontactaddress3  altcontactzipcode 
                           altcontactcountry   altcontactphone
-                          smsalertnumber/;
+                          smsalertnumber      state
+                          altcontactstate     altcontactcity
+                          B_state             privacy /;
 
 open my $out,">:utf8",$outfile_name;
 for my $j (0..scalar(@borrower_fields)-1){
@@ -121,7 +128,7 @@ LINE:
 while (my $line = readline($infl)){
    last LINE if ($debug && $written >50);
    $i++;
-   print ".";
+   print "." unless ($i % 10);
    print "\r$i" unless ($i % 100);
 
    chomp $line;
@@ -186,12 +193,15 @@ while (my $line = readline($infl)){
       $cat3 =~ s/\s+$//g;
       if ($cat1 ne q{}){
          $addedcode .= ",CAT1:$cat1";
+         $patron_cat1s{$cat1}++;
       }
       if ($cat2 ne q{}){
          $addedcode .= ",CAT2:$cat2";
+         $patron_cat2s{$cat2}++;
       }
       if ($cat3 ne q{}){
          $addedcode .= ",CAT3:$cat3";
+         $patron_cat3s{$cat3}++;
       }
       $addedcode =~ s/^,//; 
       next LINE;
@@ -224,12 +234,18 @@ while (my $line = readline($infl)){
    }
 
    if ($line =~ / City:(.+)/){
-      $thisrow{$address_toggle.'city'}=$1;
+      ($thisrow{$address_toggle.'city'},$thisrow{$address_toggle.'state'})=split (/,/,$1);
+      if ($thisrow{$address_toggle.'state'}){
+         $thisrow{$address_toggle.'state'} =~ s/^\s+//;
+      }
       next LINE;
    }
 
    if ($line =~ / City, State:(.+)/){
-      $thisrow{$address_toggle.'city'}=$1;
+      ($thisrow{$address_toggle.'city'},$thisrow{$address_toggle.'state'})=split (/,/,$1);
+      if ($thisrow{$address_toggle.'state'}){
+         $thisrow{$address_toggle.'state'} =~ s/^\s+//;
+      }
       next LINE;
    }
 
@@ -316,6 +332,10 @@ while (my $line = readline($infl)){
       if ($branch_map{$thisrow{branchcode}}){
          $thisrow{branchcode} = $branch_map{$thisrow{branchcode}};
       }
+    
+      if ($default_privacy ne q{}){
+         $thisrow{privacy} = $default_privacy;
+      }
 
       if (!$drop_codes{$thisrow{categorycode}}){
          $patron_categories{$thisrow{categorycode}}++;
@@ -374,6 +394,21 @@ print "\nResults by categorycode:\n";
 foreach my $kee (sort keys %patron_categories){
     print $kee.":  ".$patron_categories{$kee}."\n";
     print $sql "INSERT INTO categories (categorycode,description) VALUES ('$kee','$kee');\n";
+}
+print "\nResults by cat1:\n";
+foreach my $kee (sort keys %patron_cat1s){
+    print $kee.":  ".$patron_cat1s{$kee}."\n";
+    print $sql "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('CAT1','$kee','$kee');";
+}
+print "\nResults by cat2:\n";
+foreach my $kee (sort keys %patron_cat2s){
+    print $kee.":  ".$patron_cat2s{$kee}."\n";
+    print $sql "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('CAT2','$kee','$kee');";
+}
+print "\nResults by cat3:\n";
+foreach my $kee (sort keys %patron_cat3s){
+    print $kee.":  ".$patron_cat3s{$kee}."\n";
+    print $sql "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('CAT3','$kee','$kee');";
 }
 close $sql;
 
