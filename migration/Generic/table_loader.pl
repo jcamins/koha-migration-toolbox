@@ -148,11 +148,11 @@ while (my $line=$csv->getline($io)){
    }
    else {
       $exceptcount++;
-      print "EXCEPTION:  $exception\n";
+      print "\nEXCEPTION:  $exception\n";
       for (my $i=0;$i<scalar(@fields);$i++){
          print $fields[$i].":  ".$data[$i]."\n";
       }
       print "--------------------------------------------\n";
    }
 }
-print "$j records processed.  $exceptcount exceptions.\n";
+print "\n\n$j records processed.  $exceptcount exceptions.\n";
