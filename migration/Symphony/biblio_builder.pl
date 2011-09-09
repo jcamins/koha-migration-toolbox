@@ -224,7 +224,7 @@ while () {
    $biblio_key =~ s/^a//;
    #$debug and print "BIBLIO: $biblio_key\n";
    foreach my $dumpfield($record->field('9..')){
-      $record->delete_field($dumpfield) if ($dumpfield->tag() ne '945');
+      $record->delete_field($dumpfield) if (($dumpfield->tag() ne '945') && ($dumpfield->tag() ne '998'));
    }
    foreach my $dumpfield($record->field('852')){
       $record->delete_field($dumpfield);
