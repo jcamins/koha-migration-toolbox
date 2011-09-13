@@ -41,6 +41,7 @@ if (!$ignore_url){
 if ($days){
    $query .= " AND datecreated < ADDDATE(CURDATE(),-$days)";
 }
+$debug and print "Q: $query\n";
 my $sth=$dbh->prepare($query);
 $sth->execute();
 while (my $rec=$sth->fetchrow_hashref()){
