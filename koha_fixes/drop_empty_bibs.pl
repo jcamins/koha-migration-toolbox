@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #---------------------------------
-# Copyright 2010 ByWater Solutions
+# Copyright 2011 ByWater Solutions
 #
 #---------------------------------
 #
@@ -19,37 +19,35 @@ my $i=0;
 
 my $days=0;
 my $written=0;
+my $ignore_url=0;
+my $silent=0;
 
 GetOptions(
     'days=s'        => \$days,
+    'ignore_url'    => \$ignore_url,
+    'silent'        => \$silent,
     'debug'         => \$debug,
     'update'        => \$doo_eet,
 );
 
 my $dbh=C4::Context->dbh();
-my $sth;
+my $query = "SELECT biblio.biblionumber FROM biblio
+                       LEFT JOIN items ON (biblio.biblionumber=items.biblionumber)
+                       JOIN biblioitems ON (biblio.biblionumber=biblioitems.biblionumber)
+                       WHERE items.biblionumber IS NULL";
+if (!$ignore_url){
+   $query .= " AND biblioitems.url IS NULL";
+}
 if ($days){
-   $sth=$dbh->prepare("SELECT biblio.biblionumber FROM biblio
-                       LEFT JOIN items ON (biblio.biblionumber=items.biblionumber)
-                       JOIN biblioitems ON (biblio.biblionumber=biblioitems.biblionumber)
-                       WHERE items.biblionumber IS NULL
-                       AND biblioitems.itemtype NOT IN ('ELECTRO','EBOOK')
-                       AND datecreated < ADDDATE(CURDATE(),-?);");
-   $sth->execute($days);
+   $query .= " AND datecreated < ADDDATE(CURDATE(),-$days)";
 }
-else {
-   $sth=$dbh->prepare("SELECT biblio.biblionumber FROM biblio
-                       LEFT JOIN items ON (biblio.biblionumber=items.biblionumber)
-                       JOIN biblioitems ON (biblio.biblionumber=biblioitems.biblionumber)
-                       WHERE items.biblionumber IS NULL
-                       AND biblioitems.itemtype NOT IN ('ELECTRO','EBOOK');");
-    $sth->execute();
-}
+my $sth=$dbh->prepare($query);
+$sth->execute();
 while (my $rec=$sth->fetchrow_hashref()){
    last if ($debug and $i>0);
    $i++;
-   print ".";
-   print "\r$i" unless ($i % 100);
+   print "." unless ($i % 10) or $silent;
+   print "\r$i" unless ($i % 100) or $silent;
    $debug and print "Biblio:  $rec->{'biblionumber'}\n";
    if ($doo_eet){
       my $err = C4::Biblio::DelBiblio($rec->{'biblionumber'});
@@ -58,5 +56,5 @@ while (my $rec=$sth->fetchrow_hashref()){
    }
 }
 
-print "\n\n$i biblios found.\n$written biblios deleted.\n";
+print "\n\n$i biblios found.\n$written biblios deleted.\n" unless $silent;
 
