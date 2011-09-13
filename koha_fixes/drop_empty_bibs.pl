@@ -36,7 +36,7 @@ my $query = "SELECT biblio.biblionumber FROM biblio
                        JOIN biblioitems ON (biblio.biblionumber=biblioitems.biblionumber)
                        WHERE items.biblionumber IS NULL";
 if (!$ignore_url){
-   $query .= " AND biblioitems.url IS NULL";
+   $query .= " AND biblioitems.url IS NOT NULL";
 }
 if ($days){
    $query .= " AND datecreated < ADDDATE(CURDATE(),-$days)";
