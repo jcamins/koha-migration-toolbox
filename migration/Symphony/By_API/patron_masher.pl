@@ -26,6 +26,8 @@ my $toss_profile_string = "";
 my %profiles_to_toss;
 my $upcase_name=0;
 my $cat1_tag = "";
+my $cat2_tag = "";
+my $cat3_tag = "";
 my $default_privacy = 0;
 
 GetOptions(
@@ -35,6 +37,8 @@ GetOptions(
     'patron-cat=s'    => \$patron_cat_mapfile,
     'branch-map=s'    => \$branch_mapfile,
     'cat1=s'          => \$cat1_tag,
+    'cat2=s'          => \$cat2_tag,
+    'cat3=s'          => \$cat3_tag,
     'default_privacy=s' => \$default_privacy,
     'upcase_name'     => \$upcase_name,
     'debug'           => \$debug,
@@ -85,6 +89,9 @@ my $toss_this_borrower;
 my $borrowers_tossed=0;
 my %headerkees;
 my %categories;
+my %cat1s;
+my %cat2s;
+my %cat3s;
 my %branches;
 my $addedcode;
 my @borrower_fields = qw /cardnumber          surname
@@ -131,7 +138,7 @@ while (my $line = readline($in)) {
    chomp $line;
    $line =~ s///g;
    $i++;
-   print ".";
+   print "." unless $i % 10;
    print "\r$i" unless $i % 100;
    if ($line =~ /DOCUMENT BOUNDARY/){
       if (%thisborrower && !$toss_this_borrower){
@@ -252,10 +259,26 @@ while (my $line = readline($in)) {
    $thisborrower{'debarred'} = 1 if (($thistag eq "USER_STATUS") && ($content eq "BARRED"));
    $thisborrower{'dateenrolled'} = _process_date($content) if ($thistag eq "USER_PRIV_GRANTED");
    $thisborrower{'dateexpiry'} = _process_date($content) if ($thistag eq "USER_PRIV_EXPIRES");
+   if ($thisborrower{'dateexpiry'} eq q{}){
+      $thisborrower{'dateexpiry'} = "2050-12-31";
+   }
    $thisborrower{'dateofbirth'} = _process_date($content) if ($thistag eq "USER_BIRTH_DATE");
 
    if ($thistag eq "USER_CATEGORY1" && $cat1_tag ne q{}){
       $addedcode .= ",$cat1_tag:$content";
+      $cat1s{$content}++;
+      next;
+   }
+
+   if ($thistag eq "USER_CATEGORY2" && $cat2_tag ne q{}){
+      $addedcode .= ",$cat2_tag:$content";
+      $cat2s{$content}++;
+      next;
+   }
+
+   if ($thistag eq "USER_CATEGORY3" && $cat3_tag ne q{}){
+      $addedcode .= ",$cat3_tag:$content";
+      $cat3s{$content}++;
       next;
    }
 
@@ -363,6 +386,21 @@ print "\nCATEGORY COUNTS\n";
 foreach my $kee (sort keys %categories){
    print "$kee: $categories{$kee}\n";
    print {$sql} "INSERT INTO categories (categorycode,description) VALUES ('$kee','$kee');\n";
+}
+print "\nUSER CAT1 COUNTS\n";
+foreach my $kee (sort keys %cat1s){
+   print "$kee: $cat1s{$kee}\n";
+   print {$sql} "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('$cat1_tag','$kee','$kee');\n";
+}
+print "\nUSER CAT2 COUNTS\n";
+foreach my $kee (sort keys %cat2s){
+   print "$kee: $cat2s{$kee}\n";
+   print {$sql} "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('$cat2_tag','$kee','$kee');\n";
+}
+print "\nUSER CAT3 COUNTS\n";
+foreach my $kee (sort keys %cat3s){
+   print "$kee: $cat3s{$kee}\n";
+   print {$sql} "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('$cat3_tag','$kee','$kee');\n";
 }
 close $sql;
 

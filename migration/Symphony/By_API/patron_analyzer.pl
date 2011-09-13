@@ -50,7 +50,7 @@ while (my $line = readline($in)) {
    chomp $line;
    $line =~ s/$//;
    $i++;
-   print ".";
+   print "." unless $i % 10;
    print "\r$i" unless $i % 100;
    if ($line =~ /DOCUMENT BOUNDARY/){
       $addr1=0;
