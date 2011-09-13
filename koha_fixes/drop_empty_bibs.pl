@@ -34,9 +34,9 @@ my $dbh=C4::Context->dbh();
 my $query = "SELECT biblio.biblionumber FROM biblio
                        LEFT JOIN items ON (biblio.biblionumber=items.biblionumber)
                        JOIN biblioitems ON (biblio.biblionumber=biblioitems.biblionumber)
-                       WHERE items.biblionumber IS NULL";
+                       WHERE items.itemnumber IS NULL";
 if (!$ignore_url){
-   $query .= " AND biblioitems.url IS NOT NULL";
+   $query .= " AND biblioitems.url IS NULL";
 }
 if ($days){
    $query .= " AND datecreated < ADDDATE(CURDATE(),-$days)";
