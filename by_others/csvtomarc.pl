@@ -771,7 +771,7 @@ ROW: while (my $row = $csv->getline($csvfile)) {
             my @item_fields = $marc_record->field('952');
             for (my $i=1; $i<$itemcount; $i++) {
                 $stat_itemsadded++;
-                $marc_record->append_fields(@item_fields);
+                $marc_record->insert_fields_ordered(@item_fields);
             }
         }
     }
@@ -1396,7 +1396,7 @@ sub add_marc_values {
         }
     } else {
         # It's MARC::Field
-        $marc_record->append_fields(@$list);
+        $marc_record->insert_fields_ordered(@$list);
     }
 }
 
