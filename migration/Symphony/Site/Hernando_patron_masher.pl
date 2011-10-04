@@ -200,7 +200,7 @@ while (my $line = readline($in)) {
          $toss_this_borrower=1;
          next;
       }
-      if ($content =~ /([\w\s]+),(.*)/){
+      if ($content =~ /([\w\s\-]+),(.*)/){
          $thisborrower{'surname'} = $1;
          $thisborrower{'firstname'} = $2;
       }
