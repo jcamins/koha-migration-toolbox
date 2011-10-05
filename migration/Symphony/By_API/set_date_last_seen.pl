@@ -65,7 +65,7 @@ while (my $itmline = readline($infl)){
    if ($seendate){
       $debug and print "Barcode: $barcode Seen: $seendate\n";
       if ($doo_eet){
-         C4::Items::ModItem({datelastseen=>$seendate},undef,$row->{itemnumber});
+         C4::Items::ModItem({datelastseen=>$seendate},undef,$item->{itemnumber});
       }
       $written++;
    } 
