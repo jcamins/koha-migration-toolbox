@@ -1,0 +1,27 @@
+
+SD 999 holding tags
+
+$m library
+$h holding code
+$c copy num
+$a call number
+$i barcode
+$p price
+$w call scheme (ignore)
+$e date last borrowed
+$f date last inventoried (ignore)
+$d date last seen
+$o note non-public (952 $x)
+$g times inventoried (ignore)
+$l location
+$r circ permission (ignore)
+$s permanent (ignore
+$t type
+$u acq date
+$x item cat 1
+$z item cat 2
+$1 itemlost 
+$V enumchron
+$n issues count
+
+

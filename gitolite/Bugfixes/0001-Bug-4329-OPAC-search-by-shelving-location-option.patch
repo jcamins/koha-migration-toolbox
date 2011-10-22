@@ -1,0 +1,109 @@
+From 32e27babe44de151e6858e03418833e5a9c5613d Mon Sep 17 00:00:00 2001
+From: Jane Wagner <jwagner@ptfs.com>
+Date: Wed, 31 Mar 2010 13:34:23 -0400
+Subject: [PATCH] Bug 4329 OPAC search by shelving location option
+
+Sponsored by Arcadia University
+
+Adds a search (under More Options in OPAC advanced search) to allow users to select one or more shelving locations as search limits.  Also added section to opac.css to format shelving location search table like itemtype search table.  Shelving location option is under Expanded Options.  If a site doesn't use shelving locations, it can be hidden with a jquery statement in opacuserjs syspref as follows:
+
+   $(document).ready(function(){
+   $("#advsearch #advsearch-shelvingloc").remove();
+   });
+---
+ koha-tmpl/opac-tmpl/prog/en/css/opac.css           |   23 ++++++++++++++++++++
+ .../opac-tmpl/prog/en/modules/opac-advsearch.tmpl  |   14 ++++++++++++
+ opac/opac-search.pl                                |   18 +++++++++++++++
+ 3 files changed, 55 insertions(+), 0 deletions(-)
+
+diff --git a/koha-tmpl/opac-tmpl/prog/en/css/opac.css b/koha-tmpl/opac-tmpl/prog/en/css/opac.css
+index b590473..5ce5208 100644
+--- a/koha-tmpl/opac-tmpl/prog/en/css/opac.css
++++ b/koha-tmpl/opac-tmpl/prog/en/css/opac.css
+@@ -648,6 +648,29 @@ input.deleteshelf {
+ 	background-color : #F8F8EB;
+ }
+ 
++/* the shelving location list in advanced search */
++#advsearch-shelvingloc table {
++	border-collapse : separate;
++	border-spacing : 3px;
++	border : 0px;
++	margin : 0px;
++	background-color : white;
++	border : 0px solid #D8DEB8;
++}
++
++#advsearch-shelvingloc table tr td {
++	background-color : #F8F8EB;
++	border : 0px;
++	margin : 0px;
++	width : 700px;
++}
++
++#advsearch-shelvingloc td {
++	font-size : 0.8em;
++	background-color : #F8F8EB;
++}
++
++
+ body#advsearch #breadcrumbs {
+ 	line-height : 1px;
+ 	height : 1px;
+diff --git a/koha-tmpl/opac-tmpl/prog/en/modules/opac-advsearch.tmpl b/koha-tmpl/opac-tmpl/prog/en/modules/opac-advsearch.tmpl
+index 1d211c4..e4ecff3 100644
+--- a/koha-tmpl/opac-tmpl/prog/en/modules/opac-advsearch.tmpl
++++ b/koha-tmpl/opac-tmpl/prog/en/modules/opac-advsearch.tmpl
+@@ -172,6 +172,20 @@
+                 </select></p><!-- <a href="">Show all languages</a>-->
+ <!-- /LANGUAGE LIMIT -->
+ </fieldset>
++    <div id="advsearch-shelvingloc" class="container">
++	<fieldset>
++    <legend>Limit to any of the following shelving locations:</legend>
++    <table>
++        <tr>
++      <!--TMPL_LOOP Name="shelvinglocsloop"-->
++        <td><input type="checkbox" id="<!-- TMPL_VAR NAME="ccl" -->-<!--TMPL_VAR Name="number" -->" name="limit" value="mc-<!-- TMPL_VAR NAME="ccl" -->:<!--TMPL_VAR Name="code" -->"/><label for="<!-- TMPL_VAR NAME="ccl" -->-<!--TMPL_VAR Name="number" -->">
++        <!--TMPL_VAR Name="description" --></label></td>
++        <!-- TMPL_UNLESS name="count5" --><!-- TMPL_UNLESS name="__last__" --></tr><tr><!-- /TMPL_UNLESS --><!-- /TMPL_UNLESS -->
++      <!--/TMPL_LOOP-->
++		</tr>
++    </table>
++	</fieldset>
++    </div>
+     <!--TMPL_IF Name="usmarc"-->
+         <!-- SUBTYPE LIMITS -->
+             <div id="subtypes" class="container"><fieldset>
+diff --git a/opac/opac-search.pl b/opac/opac-search.pl
+index e1d61fa..d72092f 100755
+--- a/opac/opac-search.pl
++++ b/opac/opac-search.pl
+@@ -148,6 +148,24 @@ $template->param(
+ my $languages_limit_loop = getAllLanguages();
+ $template->param(search_languages_loop => $languages_limit_loop,);
+ 
++# add support for searching by shelving location
++my @shelvinglocsloop;
++my $selected=1;
++my $cnt2;
++my $shelflocations =GetAuthorisedValues("LOC");
++for my $thisloc (sort {$a->{'lib'} cmp $b->{'lib'}} @$shelflocations) {
++    my %row =(
++                number => $cnt2++,
++                ccl => 'loc',
++                code => $thisloc->{authorised_value},
++                selected => $selected,
++                description => $thisloc->{'lib'},
++                count5 => $cnt2 % 4,
++              );
++    	$selected = 0; # set to zero after first pass through
++    push @shelvinglocsloop, \%row;
++}
++$template->param(shelvinglocsloop => \@shelvinglocsloop);
+ # load the Type stuff
+ my $itemtypes = GetItemTypes;
+ # the index parameter is different for item-level itemtypes
+-- 
+1.5.6.5
+

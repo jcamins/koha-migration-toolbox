@@ -1,0 +1,12 @@
+:a;N;$!ba;s/\n/~/g
+s///g
+s/<ROW/\n<ROW/g
+s/<FIELD/\n<FIELD/g
+s/<COL><DATA>/|/g
+s/<\/DATA><\/COL>//g
+s/<\/ROW>//g
+s/<ROW MODID=//g
+s/ RECORDID="/|/g
+s/">//g
+s/"(\d+?)"/($1)/g
+s/<\/METADATA/\n<\/METADATA/

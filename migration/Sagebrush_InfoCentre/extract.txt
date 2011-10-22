@@ -1,0 +1,34 @@
+Request BACKUP copy of the Sagebrush/InfoCentre database.
+
+****Notes from Converse Free
+The database backup file we sent you was created with the "osql" command 
+on our server (Windows Server 2003, version 5.2 SP2). Specifically, we use 
+a script daily to create backups. The exact osql command in that script is:
+
+osql -U sa -P sagepw -S 127.0.0.1\Sagebrush -Q "backup database IC to disk = 'C:\InfoCentreServer\data\InfoCentre\backups\new_file.backup' with INIT"
+*************
+
+The backup file (in the above example was called 201109150920_IC.backup) is
+dropped into the Dropbox.
+
+Download SQLExpress onto computer (free version).  Install.
+Connect to database engine (my default is OWNER-PC\SQLEXPRESS)
+On Database in Object Explorer window, right click and create new database
+On Database, right click and say 'Restore Database'
+Select new database in Destination
+Select the backcup file (From device) in the Source area. 
+Click on Options in the left window pane.
+Select Overwrite the existing database (with Replace)
+Click OK
+
+After restored.
+Click on New Query
+Right click to select "design editor" (graphical interface ala Access db)
+or enter the query below and click Execute! to see circulation data.
+
+
+SELECT     Sagebrush.checkouts.*, Sagebrush.copies.copy_oid AS Expr1, Sagebrush.copies.copy_id, Sagebrush.copies.call_number, Sagebrush.patrons.patron_oid AS Expr2, 
+                      Sagebrush.patrons.patron_id, Sagebrush.patrons.surname, Sagebrush.patrons.first_name
+FROM         Sagebrush.copies INNER JOIN
+                      Sagebrush.checkouts ON Sagebrush.copies.copy_oid = Sagebrush.checkouts.copy_oid INNER JOIN
+                      Sagebrush.patrons ON Sagebrush.checkouts.patron_oid = Sagebrush.patrons.patron_oid
