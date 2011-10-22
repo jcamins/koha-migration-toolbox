@@ -7,38 +7,94 @@
 # -D Ruth Bavousett
 #
 #---------------------------------
+#
+# EXPECTS:
+#   -Patron responsibility data, CSV, in THIS order:
+#      patron barcode, guarantor barcode
+#
+# DOES:
+#   -inserts guarantor data, if --update is set
+#
+# CREATES:
+#   -nothing
+#
+# REPORTS:
+#   -problem records
+#   -count of lines read
+#   -count of fines inserted
+#   -count of problems
 
+use autodie;
 use strict;
 use warnings;
+use Carp;
+use Data::Dumper;
+use English qw( -no_match_vars );
 use Getopt::Long;
-use Text::CSV;
+use Readonly;
+use Text::CSV_XS;
+
 use C4::Context;
 
-my $infile_name = "";
+local    $OUTPUT_AUTOFLUSH =  1;
+Readonly my $NULL_STRING   => q{};
+
+my $debug   = 0;
+my $doo_eet = 0;
+my $i       = 0;
+
+my $input_filename = "";
 
 GetOptions(
-    'in=s'     => \$infile_name,
+    'in=s'     => \$input_filename,
+    'debug'    => \$debug,
+    'update'   => \$doo_eet,
+
 );
 
-if (($infile_name eq '')){
-   print "You're missing something.\n";
-   exit;
+for my $var ($input_filename) {
+   croak ("You're missing something") unless $var ne $NULL_STRING;
 }
 
-my $csv=Text::CSV->new();
-my $dbh=C4::Context->dbh();
-my $i=0;
-open my $io,"<$infile_name";
-my $convertq = $dbh->prepare("SELECT borrowernumber FROM borrowers WHERE cardnumber = ?");
-my $sth = $dbh->prepare("UPDATE borrowers SET guarantorid = ? WHERE cardnumber = ?");
-while (my $row=$csv->getline($io)){
-   my @data=@$row;
+my $csv     = Text::CSV_XS->new();
+my $dbh     = C4::Context->dbh();
+my $written = 0;
+my $problem = 0;
+
+my $borrower_sth = $dbh->prepare("SELECT borrowernumber FROM borrowers WHERE cardnumber = ?");
+my $insert_sth   = $dbh->prepare("UPDATE borrowers SET guarantorid = ? WHERE cardnumber = ?");
+
+open my $input_file,'<',$input_filename;
+
+LINE:
+while (my $line=$csv->getline($input_file)) {
    $i++;
-   print ".";
+   print '.'    unless ($i % 10);
    print "\r$i" unless ($i % 100);
-   $convertq->execute($data[1]);
-   my $arr= $convertq->fetchrow_hashref();
-   my $guarantor= $arr->{'borrowernumber'};
-   $sth->execute($guarantor,$data[0]);
-}
+   my @data = @$line;
 
+   borrower_sth->execute($data[1]);
+   my $this_borrower= $convertq->fetchrow_hashref();
+   if ($this_borrower) {
+      $debug and print "B: $data[1] ($this_borrower->{borrowernumber})   G:$data[0]\n";
+      if ($doo_eet){
+         $sth->execute( $this_borrower->{borrowernumber} ,$data[0]);
+      }
+      $written++;
+   }
+   else {
+      print "Problem record:\n";
+      print "B: $data[1]  G:$data[0]\n";
+      $problem++;
+   }
+}
+close $input_file;
+
+print << "END_REPORT";
+
+$i records read.
+$written records written.
+$problem records not loaded due to problems.
+END_REPORT
+
+exit;

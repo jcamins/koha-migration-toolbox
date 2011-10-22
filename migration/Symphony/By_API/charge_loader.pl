@@ -14,20 +14,26 @@ use Getopt::Long;
 use C4::Context;
 $|=1;
 my $debug=0;
+my $doo_eet=0;
 
 my $infile_name = "";
+my $duple_name = "";
 
 GetOptions(
     'in=s'            => \$infile_name,
+    'dup=s'           => \$duple_name,
     'debug'           => \$debug,
+    'update'          => \$doo_eet,    
+
 );
 
-if (($infile_name eq '')){
+if (($infile_name eq '') || ($duple_name eq '')){
   print "Something's missing.\n";
   exit;
 }
 
 open my $in,"<$infile_name";
+open my $out,'>',$duple_name;
 my $i=0;
 my $j=0;
 my $problem=0;
@@ -36,6 +42,7 @@ my $dbh = C4::Context->dbh();
 my $sth = $dbh->prepare("INSERT INTO issues (borrowernumber, itemnumber, date_due, issuedate, branchcode) VALUES (?, ?, ?, ?, ?)");
 my $borr_sth = $dbh->prepare("SELECT borrowernumber FROM borrowers WHERE cardnumber=?");
 my $item_sth = $dbh->prepare("SELECT itemnumber FROM items WHERE barcode=?");
+my $issue_sth = $dbh->prepare("SELECT * from issues where itemnumber=?");
 
 while (my $line = readline($in)) {
    last if ($debug && $j>0);
@@ -50,11 +57,18 @@ while (my $line = readline($in)) {
          $debug and print Dumper(%thisissue);
          if ($thisissue{'borrowernumber'} && $thisissue{'itemnumber'}){
             $j++;
-            $sth->execute($thisissue{'borrowernumber'},
-                          $thisissue{'itemnumber'},
-                          $thisissue{'duedate'},
-                          $thisissue{'issuedate'},
-                          $thisissue{'branchcode'});
+            $issue_sth->execute($thisissue{'itemnumber'});
+            my $issue = $issue_sth->fetchrow_hashref();
+            if ($issue) {
+                print $out "Doubled checkout: \n".Dumper(%thisissue)."\n";
+            }
+            elsif ($doo_eet) {
+               $sth->execute($thisissue{'borrowernumber'},
+                             $thisissue{'itemnumber'},
+                             $thisissue{'duedate'},
+                             $thisissue{'issuedate'},
+                             $thisissue{'branchcode'});
+            }
          }
          else{
             print "\nProblem record:\n";
