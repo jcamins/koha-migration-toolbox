@@ -110,7 +110,7 @@ $csv_format->column_names( qw( patronid        name     street    city      zipc
                                attr20          id       attr22    attr23    attr24
                                attr25          attr26   email     birthdate attr29
                                attr30          attr31   altstreet altcity   altcontactzipcode
-                               altcontactphone notes    attr37    attr38    attr39
+                               altcontactphone borrowernotes    attr37    attr38    attr39
                                attr40          employer attr42    attr43    attr44
                                attr45          attr46   attr47    attr48    attr49
                                attr50          attr51   attr52    attr54    attr55
@@ -175,6 +175,11 @@ while (my $patron=$csv_format->getline_hr($input_file)){
    $debug and print Dumper($row);
 
    my %thispatron;
+   my $addedcode = $NULL_STRING;
+
+   if (exists $branch_map{ $patron->{branchcode} }) {
+      $patron->{branchcode} = $branch_map{ $patron->{branchcode} };
+   }
 
    my $lost_barcode1 = $NULL_STRING;
    my $found         = 0;
@@ -211,29 +216,71 @@ while (my $patron=$csv_format->getline_hr($input_file)){
       $thispatron{cardnumber} = "TEMP".$patron->{patronid};
    }       
 
-   if ($patron->{name} =~ m/
-               
+   if ($patron->{name} =~ m/,/) {
+      ($thispatron{surname},$thispatron{firstname} = split /,/,$patron->{name};
+   }
+   else {
+      $thispatron{surname} = $patron->{name};
+   }
 
+   if ($patron->{guardan} =~ m/,/) {
+      ($thispatron{altcontactsurname},$thispatron{altcontactfirstname}) = split /,/,$patron->{guardian};
+   }
+   else {
+      $thispatron{altcontactsurname} = $patron->{guardian};
+   }
 
+   if (exists $city_map{ $patron->{city} }) {
+      $thispatron{city}  = $city_map{ $patron->{city} };
+      $thispatron{state} = $state_map{ $patron->{city} };
+   }
+   if (exists $city_map{ $patron->{altcity} }) {
+      $thispatron{altcontactaddress3} = $city_map{ $patron->{altcity} };
+      $thispatron{altcontactstate}    = $state_map{ $patron->{altcity} };
+   }
+   else {
+      $thispatron{altcontactaddress3} = $patron->{altcity};
+   }
 
-   $patron_categories{$thisrow{categorycode}}++;
-   $patron_branches{$thisrow{branchcode}}++;
+   if (exists ($patron->{dates})) {
+      my ($dateadd,undef,$dateexpire) = split /$SUBFIELD_SEP/,$patron->{dates};
+      $thispatron{dateenrolled} = process_date($dateadd);
+      $thispatron{dateexpiry}   = process_date($dateexpiry);
+   }
+
+   $thispatron{dateofbirth} = $process_date($patron->{birthdate});
+
+   my ($thispatron{address},$thispatron{address2}                    = split /$SUBFIELD_SEP/,$patron->{street};
+   ($thispatron{altcontactaddress1},$thispatron{altcontactaddress2}) = split /$SUBFIELD_SEP/,$patron->{altstreet};
+
+   $patron->{borrowernotes} =~ s/$SUBFIELD_SEP/ -- /g;
+   if ($patron->{employer}) {
+      $patron->{borrowernotes} .= ' -- Employer: '.$patron->{employer};
+
+   $patron_categories{$patron->{categorycode}}++;
+   $patron_branches{$patron->{branchcode}}++;
    for my $j (0..scalar(@borrower_fields)-1){
-      if ($thisrow{$borrower_fields[$j]}){
-         $thisrow{$borrower_fields[$j]} =~ s/\"/'/g;
-         if ($thisrow{$borrower_fields[$j]} =~ /,/){
-            print $out '"'.$thisrow{$borrower_fields[$j]}.'"';
+      my $field = $NULL_STRING;
+      if ($thispatron{$borrower_fields[$j]}) {
+         $field = $thispatron{$borrower_fields[$j]; 
+      }
+      elsif ($patron->{$borrower_fields[$j]}) {
+         $field = $patron->{$borrower_fields[$j]};
+      }
+         $field} =~ s/\"/'/g;
+         if ($field =~ /,/){
+            print {$output_file} '"'.$field.'"';
          }
          else{
-            print $out $thisrow{$borrower_fields[$j]};
+            print {$output_file} $field;
          }
       }
       print $out ",";
    }
    if ($addedcode){
-       print $out '"'."$addedcode".'"';
+       print {$output_file} '"'."$addedcode".'"';
    }
-   print $out "\n";
+   print {$output_file} "\n";
    $written++;
 }
 
@@ -258,21 +305,8 @@ exit;
 
 sub _process_date {
    my $datein = shift;
-   my $limit  = shift;
    return undef if !$datein;
    return undef if $datein eq q{};
-   my %months =(
-                JAN => 1, FEB => 2,  MAR => 3,  APR => 4,
-                MAY => 5, JUN => 6,  JUL => 7,  AUG => 8,
-                SEP => 9, OCT => 10, NOV => 11, DEC => 12
-               );
-   my ($day,$monthstr,$year) = split /\-/, $datein;
-   if ($year < $limit){
-       $year +=2000;
-   }
-   else{
-       $year +=1900;
-   }
-   return sprintf "%4d-%02d-%02d",$year,$months{uc $monthstr},$day;
+   my ($year,$month,$day) = Add_Delta_Days(1967,12,31,$datein);
+   return sprintf "%4d-%02d-%02d",$year,$month,$day;
 }
-

@@ -35,6 +35,7 @@ my $i=0;
 my $query = "SELECT borrowernumber,surname FROM borrowers";
 if ($where_clause ne '') {
    $query .= 'WHERE '.$where_clause;
+}
 my $find = $dbh->prepare($query);
 
 $find->execute();
