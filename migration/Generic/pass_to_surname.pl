@@ -34,8 +34,9 @@ my $dbh=C4::Context->dbh();
 my $i=0;
 my $query = "SELECT borrowernumber,surname FROM borrowers";
 if ($where_clause ne '') {
-   $query .= 'WHERE '.$where_clause;
+   $query .= ' WHERE '.$where_clause;
 }
+$debug and print "QUERY: $query\n";
 my $find = $dbh->prepare($query);
 
 $find->execute();
