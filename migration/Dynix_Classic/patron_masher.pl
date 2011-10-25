@@ -29,6 +29,7 @@ use English qw( -no_match_vars );
 use Getopt::Long;
 use Readonly;
 use Text::CSV_XS;
+use Date::Calc qw(Add_Delta_Days);
 
 local    $OUTPUT_AUTOFLUSH =  1;
 Readonly my $NULL_STRING   => q{};
@@ -68,21 +69,23 @@ for my $var ($input_filename,$output_filename,$barcode_filename,$default_branch,
 
 my %barcode_hash;
 
+Readonly my $CSV_SEP      => '\|';
 Readonly my $FIELD_SEP    => chr(254);
 Readonly my $SUBFIELD_SEP => chr(253);
 
 if ($barcode_filename){
-   open my $barcode_file,'<',$barcode_filename";
+   open my $barcode_file,'<',$barcode_filename;
    while (my $line = readline($barcode_file)){
       my @columns=split /$FIELD_SEP/,$line;
       $barcode_hash{$columns[0]} = $columns[1];
    }
    close $barcode_file;
 }
+#$debug and warn Dumper(%barcode_hash);
 
 if ($city_map_filename){
    my $csv = Text::CSV_XS->new();
-   open my $map_file,'<',$city_map_filename";
+   open my $map_file,'<',$city_map_filename;
    while (my $row = $csv->getline($map_file)){
       my @data = @$row;
       $city_map{$data[0]}  = $data[1];
@@ -90,20 +93,20 @@ if ($city_map_filename){
    }
    close $map_file;
 }
+#$debug and warn Dumper(%city_map);
 
 if ($branch_map_filename){
-   my $csv = Text::CSV->new();
-   open my $map_file,"<$branch_map_filename";
+   my $csv = Text::CSV_XS->new();
+   open my $map_file,'<',$branch_map_filename;
    while (my $row = $csv->getline($map_file)){
       my @data = @$row;
       $branch_map{$data[0]} = $data[1];
    }
    close $map_file;
 }
+#$debug and warn Dumper(%branch_map);
 
-
-my $csv_format = Text::CSV_XS->new({ sep_char => chr(254) });
-$csv_format->column_names( qw( patronid        name     street    city      zipcode 
+my @column_names =         qw/ patronid        name     street    city      zipcode 
                                barcodes        dates    lastuse   usage     categorycode
                                pstat           guardian itemout   pin       phone
                                branchcode      attr16   attr17    attr18    attr19
@@ -119,7 +122,7 @@ $csv_format->column_names( qw( patronid        name     street    city      zipc
                                attr65          attr66   attr67    attr68    attr69
                                attr70          attr71   attr72    attr73    attr74
 			       attr75          attr76   attr77    attr78    attr79
-                               attr81          flag     attr83    flagdate ); 
+                               attr81          flag     attr83    flagdate/ ; 
 
 my %patron_categories;
 my %patron_branches;
@@ -166,30 +169,43 @@ print {$output_file} "patron_attributes\n";
 
 open my $input_file,'<',$input_filename;
 RECORD:
-while (my $patron=$csv_format->getline_hr($input_file)){
+while (my $line = readline($input_file)){
    last RECORD if ($debug and $i>10);
    $i++;
    print ".";
    print "\r$i" unless ($i % 100);
-   $debug and print "\n$i: ";
-   $debug and print Dumper($row);
-
+   #$debug and print "\n$i: ";
+   
    my %thispatron;
+
+   chomp $line;
+   $line =~ s///g;
+   my @columns = split /$CSV_SEP/,$line;
+   for my $j (0..scalar(@column_names)-1) {
+      $thispatron{$column_names[$j]} = $columns[$j] || $NULL_STRING;
+   }
    my $addedcode = $NULL_STRING;
 
-   if (exists $branch_map{ $patron->{branchcode} }) {
-      $patron->{branchcode} = $branch_map{ $patron->{branchcode} };
+   if (exists $branch_map{ $thispatron{branchcode} }) {
+      $thispatron{branchcode} = $branch_map{ $thispatron{branchcode} };
    }
 
    my $lost_barcode1 = $NULL_STRING;
    my $found         = 0;
-   my @bars = split /$SUBFIELD_SEP/,$patron->{barcodes};
+   $thispatron{keep_barcodes} = $NULL_STRING;
+   $thispatron{lostbarcodes} = $NULL_STRING;
+   $debug and print "BARCODES $thispatron{barcodes}\n";
+   my @bars = split /$SUBFIELD_SEP/,$thispatron{barcodes};
+
    foreach my $barcode (@bars) {
-      if (exists $barcode_hash{$barcode};
-         my $dynix_key = $barcode_hash{barcode};
+      $debug and print "BAR $barcode\n";
+      if (exists $barcode_hash{$barcode}) {
+         $debug and print "FOUND\n";
+         my $dynix_key = $barcode_hash{$barcode};
          my $patron_id = $dynix_key;
          $patron_id =~ s/^\*//g;
-         if ($tempkey eq $patron->{patronid}) {
+         $debug and print "PATRON_ID: $patron_id  PATRON: $thispatron{patronid}\n";
+         if ($patron_id eq $thispatron{patronid}) {
             if (substr($dynix_key,0,1) ne '*') {  #non-lost barcode
                if (!$found) {
                   $thispatron{cardnumber} = $barcode;
@@ -206,86 +222,96 @@ while (my $patron=$csv_format->getline_hr($input_file)){
          }
       }
    }
-   if ( (not exists ($thispatron{cardnumber}) && ($length($lost_barcode1) > 0) ) {
+   if ( (not exists ($thispatron{cardnumber})) && (length($lost_barcode1) > 0) ) {
       $thispatron{cardnumber}   =  $lost_barcode1;
       $thispatron{lostbarcodes} =~ s/\|$lost_barcode1//g;
    }
    $thispatron{keep_barcodes} =~ s/^\|//g;
+   foreach my $okay_barcode (split /\|/,$thispatron{keep_barcodes}) {
+      $addedcode .= ',GOODBAR:'.$okay_barcode;
+   }
+
    $thispatron{lostbarcodes}  =~ s/^\|//g;
-   if (not exists($thispatron{cardnumber}) {
-      $thispatron{cardnumber} = "TEMP".$patron->{patronid};
+   if (not exists($thispatron{cardnumber})) {
+      $thispatron{cardnumber} = "TEMP".$thispatron{patronid};
    }       
 
-   if ($patron->{name} =~ m/,/) {
-      ($thispatron{surname},$thispatron{firstname} = split /,/,$patron->{name};
+   if ($thispatron{name} =~ m/,/) {
+      ($thispatron{surname},$thispatron{firstname}) = split /,/,$thispatron{name};
+      $thispatron{firstname} =~ s/^ //;
    }
    else {
-      $thispatron{surname} = $patron->{name};
+      $thispatron{surname} = $thispatron{name};
    }
 
-   if ($patron->{guardan} =~ m/,/) {
-      ($thispatron{altcontactsurname},$thispatron{altcontactfirstname}) = split /,/,$patron->{guardian};
-   }
-   else {
-      $thispatron{altcontactsurname} = $patron->{guardian};
-   }
-
-   if (exists $city_map{ $patron->{city} }) {
-      $thispatron{city}  = $city_map{ $patron->{city} };
-      $thispatron{state} = $state_map{ $patron->{city} };
-   }
-   if (exists $city_map{ $patron->{altcity} }) {
-      $thispatron{altcontactaddress3} = $city_map{ $patron->{altcity} };
-      $thispatron{altcontactstate}    = $state_map{ $patron->{altcity} };
+   if ($thispatron{guardian} =~ m/,/) {
+      ($thispatron{altcontactsurname},$thispatron{altcontactfirstname}) = split /,/,$thispatron{guardian};
+      $thispatron{altcontactfirstname} =~ s/^ //;
    }
    else {
-      $thispatron{altcontactaddress3} = $patron->{altcity};
+      $thispatron{altcontactsurname} = $thispatron{guardian};
    }
 
-   if (exists ($patron->{dates})) {
-      my ($dateadd,undef,$dateexpire) = split /$SUBFIELD_SEP/,$patron->{dates};
-      $thispatron{dateenrolled} = process_date($dateadd);
-      $thispatron{dateexpiry}   = process_date($dateexpiry);
+   if (exists $city_map{ $thispatron{city} }) {
+      $thispatron{state} = $state_map{ $thispatron{city} };
+      $thispatron{city}  = $city_map{ $thispatron{city} };
+   }
+   if (exists $city_map{ $thispatron{altcity} }) {
+      $thispatron{altcontactaddress3} = $city_map{ $thispatron{altcity} };
+      $thispatron{altcontactstate}    = $state_map{ $thispatron{altcity} };
+   }
+   else {
+      $thispatron{altcontactaddress3} = $thispatron{altcity};
    }
 
-   $thispatron{dateofbirth} = $process_date($patron->{birthdate});
+   if (exists ($thispatron{dates})) {
+      my ($dateadd,undef,$dateexpire) = split /$SUBFIELD_SEP/,$thispatron{dates};
+      $thispatron{dateenrolled} = _process_date($dateadd);
+      $thispatron{dateexpiry}   = _process_date($dateexpire);
+   }
 
-   my ($thispatron{address},$thispatron{address2}                    = split /$SUBFIELD_SEP/,$patron->{street};
-   ($thispatron{altcontactaddress1},$thispatron{altcontactaddress2}) = split /$SUBFIELD_SEP/,$patron->{altstreet};
+   $thispatron{dateofbirth} = _process_date($thispatron{birthdate});
 
-   $patron->{borrowernotes} =~ s/$SUBFIELD_SEP/ -- /g;
-   if ($patron->{employer}) {
-      $patron->{borrowernotes} .= ' -- Employer: '.$patron->{employer};
+   ($thispatron{address},$thispatron{address2})                      = split /$SUBFIELD_SEP/,$thispatron{street};
+   ($thispatron{altcontactaddress1},$thispatron{altcontactaddress2}) = split /$SUBFIELD_SEP/,$thispatron{altstreet};
 
-   $patron_categories{$patron->{categorycode}}++;
-   $patron_branches{$patron->{branchcode}}++;
+   $thispatron{borrowernotes} =~ s/$SUBFIELD_SEP/ -- /g;
+   if ($thispatron{employer}) {
+      $thispatron{borrowernotes} .= ' -- Employer: '.$thispatron{employer};
+   }
+
+   if ($thispatron{branchcode} eq $NULL_STRING) {
+      $thispatron{branchcode} = $default_branch;
+   }
+   if ($thispatron{categorycode} eq $NULL_STRING) {
+      $thispatron{categorycode} = $default_category;
+   }
+   $patron_categories{$thispatron{categorycode}}++;
+   $patron_branches{$thispatron{branchcode}}++;
    for my $j (0..scalar(@borrower_fields)-1){
       my $field = $NULL_STRING;
       if ($thispatron{$borrower_fields[$j]}) {
-         $field = $thispatron{$borrower_fields[$j]; 
+         $field = $thispatron{$borrower_fields[$j]}; 
       }
-      elsif ($patron->{$borrower_fields[$j]}) {
-         $field = $patron->{$borrower_fields[$j]};
+      $field =~ s/\"/'/g;
+      if ($field =~ /,/){
+         print {$output_file} '"'.$field.'"';
       }
-         $field} =~ s/\"/'/g;
-         if ($field =~ /,/){
-            print {$output_file} '"'.$field.'"';
-         }
-         else{
-            print {$output_file} $field;
-         }
+      else{
+         print {$output_file} $field;
       }
-      print $out ",";
+      print {$output_file} ",";
    }
    if ($addedcode){
+       $addedcode =~ s/^,//;
        print {$output_file} '"'."$addedcode".'"';
    }
    print {$output_file} "\n";
    $written++;
 }
 
-close $infl;
-close $out;
+close $input_file;
+close $output_file;
 
 print "\n\n$i lines read.\n$written borrowers written.\n$no_barcode with no barcode.\n";
 print "\nResults by branchcode:\n";
@@ -307,6 +333,7 @@ sub _process_date {
    my $datein = shift;
    return undef if !$datein;
    return undef if $datein eq q{};
+   return undef if $datein < 0;
    my ($year,$month,$day) = Add_Delta_Days(1967,12,31,$datein);
    return sprintf "%4d-%02d-%02d",$year,$month,$day;
 }

@@ -125,16 +125,6 @@ while (my $line=$csv->getline($in)){
       delete $borrower{patron_attributes}; 
       $patron_attributes = extended_attributes_code_value_arrayref($attr_str);
    }
-   foreach (qw(dateofbirth dateenrolled dateexpiry)) {
-      my $tempdate = $borrower{$_} or next;
-      if ($tempdate =~ /$date_re/) {
-         $borrower{$_} = format_date_in_iso($tempdate);
-      } elsif ($tempdate =~ /$iso_re/) {
-         $borrower{$_} = $tempdate;
-      } else {
-         $borrower{$_} = '';
-      }
-   }
    $borrower{dateenrolled} = $today_iso unless $borrower{dateenrolled};
    $borrower{dateexpiry} = GetExpiryDate($borrower{categorycode},$borrower{dateenrolled}) unless $borrower{dateexpiry};
 
