@@ -34,7 +34,7 @@ while (my $row=$find->fetchrow_hashref()){
    $i++;
    print ".";
    print "\r$i" unless ($i % 100);
-   my ($city,$state) = split(/,/,$row->{'city'},2);
+   my ($city,$state) = split(/[, ]([^, ]+)$/,$row->{'city'},2);
    if ($city && $city ne $row->{'city'}){
       $state =~ s/^\s+//;
       $debug and print "Changing $row->{'borrowernumber'} $row->{'city'}   NEW CITY:$city  NEW ST:$state \n";

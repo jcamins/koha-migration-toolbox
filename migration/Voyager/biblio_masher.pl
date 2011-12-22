@@ -53,6 +53,7 @@ my $drop_types_str = q{};
 my %drop_types;
 my $repl_price_override = q{};
 my $dump_copynums = 0;
+my $new942 = 0;
 
 
 my $csv = Text::CSV_XS->new({binary => 1});
@@ -186,6 +187,7 @@ while ( ) {
     $last_record=$record->clone();
     my $biblio_id = $id_tag->data();
     #$debug and print $biblio_id;
+#print "the biblio_id is: $biblio_id\n";
 
     foreach my $dumpfield($record->field('942')){
         $record->delete_field($dumpfield);
@@ -193,23 +195,37 @@ while ( ) {
     foreach my $dumpfield($record->field('952')){
         $record->delete_field($dumpfield);
     }
-
+    foreach my $dumpfield($record->field('995')){
+        $record->delete_field($dumpfield);
+    }
+    foreach my $dumpfield($record->field('999')){
+        $record->delete_field($dumpfield);
+    }
+    foreach my $dumpfield($record->field('852')){
+        $record->delete_field($dumpfield);
+    }
     my @matches = qx(grep "^$biblio_id," $itemsfiles);
+
     next RECORD if ($drop_noitem && scalar(@matches) == 0);
 
     my $itemcount=0;
+$new942=0;
 MATCH:
     foreach my $match (@matches){
+#print "$biblio_id\n";
+#print "$match\n";
         $itemcount++;
         $csv->parse($match);
+
         my @columns = $csv->fields();
-        if (scalar(@columns) != 16){
-           print "\n$biblio_id\n$match\n";
-           next MATCH;
-        }
+#        if (scalar(@columns) != 16){
+#           print "\n$biblio_id\n$match\n";
+#           next MATCH;
+#           }
 
         my $barcode = $columns[2];
-        if ($barcode eq q{}){
+#        if ($barcode eq q{} || $barcode eq $NULL_STRING ){
+        if ($barcode eq $NULL_STRING ){
            $barcode = sprintf "%d-%04d",$read,$itemcount;
         }
 
@@ -220,7 +236,14 @@ MATCH:
             $itype = $itype_map{$itype};
         }
         next MATCH if $drop_types{$itype};
-        next MATCH if ($debug && $itype ne "NEWSPAPER");
+
+#try this loop for one 942 field.
+        if ( $new942 == 0 ) {
+        my $tag942=MARC::Field->new('942',' ',' ', 'c' => $itype);
+        $record->insert_grouped_field($tag942);
+        $new942++;
+        }
+#end loop here
 
         my $branchcode = $branch;
         if (exists $branch_map{$branchcode}){
@@ -286,9 +309,9 @@ MATCH:
             $field->add_subfields( 'h' => $enumchron );
         }
 
-        if ($columns[8] ne $NULL_STRING){
-            $field->add_subfields( 'l' => $columns[8] );
-        }
+#        if ($columns[8] ne $NULL_STRING){
+#            $field->add_subfields( 'l' => $columns[8] );
+#        }
 
         if ($columns[11] ne $NULL_STRING){
             my $price = $columns[11] / 100;
@@ -310,13 +333,16 @@ MATCH:
         if ($columns[13] ne '1'){
             $field->add_subfields( '3' => $columns[13] );
         }
-
+#change column[14] from t to x for CIN- 
         if ($columns[14] ne $NULL_STRING){
-            $field->add_subfields( 't' => $columns[14] );
+            $field->add_subfields( 'x' => $columns[14] );
         }
 
-        $record->append_fields($field);
+#        $record->append_fields($field);
+$record->insert_grouped_field($field);
         $items_found++;
+
+
     }
     eval{ print {$out} $record->as_usmarc();} ;
     if ($@){

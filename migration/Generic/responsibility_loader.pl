@@ -73,12 +73,12 @@ while (my $line=$csv->getline($input_file)) {
    print "\r$i" unless ($i % 100);
    my @data = @$line;
 
-   borrower_sth->execute($data[1]);
-   my $this_borrower= $convertq->fetchrow_hashref();
+   $borrower_sth->execute($data[1]);
+   my $this_borrower= $borrower_sth->fetchrow_hashref();
    if ($this_borrower) {
       $debug and print "B: $data[1] ($this_borrower->{borrowernumber})   G:$data[0]\n";
       if ($doo_eet){
-         $sth->execute( $this_borrower->{borrowernumber} ,$data[0]);
+         $insert_sth->execute( $this_borrower->{borrowernumber} ,$data[0]);
       }
       $written++;
    }

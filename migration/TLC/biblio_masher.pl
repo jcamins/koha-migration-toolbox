@@ -61,7 +61,7 @@ open my $mapfile,"<$mapfile_name";
 while (my $row = $mapcsv->getline($mapfile)){
    my @data = @$row;
    $mapcount++;
-   print ".";
+   print "." unless ($mapcount % 10);
    print "\r$mapcount" unless ($mapcount % 100);
    $branchmap{$data[0]}=$data[1];
    $typemap{$data[0]}=$data[2];
@@ -113,7 +113,7 @@ while () {
    }
    last unless ($record);
    $i++;
-   print ".";
+   print "." unless $i % 10;
    print "\r$i" unless $i % 100;
 
    if (!$record->field("852")){

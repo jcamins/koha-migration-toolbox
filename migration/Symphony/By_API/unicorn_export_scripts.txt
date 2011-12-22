@@ -13,3 +13,9 @@ selvendor -oJm >vendorname.data
 selserctl |dumpflatserctl >serctl.data
 selcatalog |catalogdump -om -ka998 -lALL_LIBS >mhld.mrc
 selprediction |dumpflatissue >serissues.data
+selfundcyc |dumpflatfcyc  >fundcycle.data
+selfund |dumpflatfund    >fund.data
+selorder |dumpflatorder    >order.data
+selmylisttitle -oLC |selmylist -iK -oUDS |seluser -iU -oBS   >list.data
+
+cat history logs | seltrans -c CV Ig

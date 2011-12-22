@@ -4,7 +4,7 @@
 #
 #---------------------------------
 #
-# -<author>
+# -D Ruth Bavousett
 #
 #---------------------------------
 #
@@ -82,8 +82,8 @@ my %locations=(
                'San Francisco' => 'SANFRAN',
               );
 my %barcode_counts;
-my $csv = Text::CSV_XS->new({sep_char => "\t"});
-open my $in,"<",$infile_name;
+my $csv = Text::CSV_XS->new({binary => 1, sep_char => "\t"});
+open my $in,"<:encoding(iso-8859-1)",$infile_name;
 open my $out,">:utf8",$outfile_name;
 my $line = readline($in);
 chomp $line;
@@ -113,13 +113,23 @@ while (my $line=readline($in)){
    my $rec = MARC::Record->new();
    $rec->leader($leaders{$data[1]});
 
+   if ($data[0] ne q{}){
+      my $fld = MARC::Field->new( '945',' ',' ','a' => $data[0] );
+      $rec->insert_grouped_field($fld);
+   }
+
    if ($data[3] ne q{}){
       my $fld = MARC::Field->new( '099',' ',' ','a' => $data[3] );
       $rec->insert_grouped_field($fld);
    }
     
    if ($data[4] ne q{}){
-      my $fld = MARC::Field->new( '099',' ',' ','a' => 'Vertical file drawer '.$data[4] );
+      my $fld = MARC::Field->new( '099',' ',' ','a' => 'Subject file: '.$data[4] );
+      $rec->insert_grouped_field($fld);
+   }
+
+   if ($data[5] ne q{}){
+      my $fld = MARC::Field->new( '901',' ',' ','a' => $data[5] );
       $rec->insert_grouped_field($fld);
    }
     
@@ -130,7 +140,7 @@ while (my $line=readline($in)){
          $first = $data[6];
       }
       else{
-         ($first,$rest) = split (/\|/,$data[6]);
+         ($first,$rest) = split (/\|/,$data[6],2);
       }
       my $fld = MARC::Field->new( 100,' ',' ','a' => $first );
       $rec->insert_grouped_field($fld);
@@ -142,15 +152,18 @@ while (my $line=readline($in)){
       }
    }
     
-   if ($data[7] ne q{}){
-      my $fld = MARC::Field->new( 500,' ',' ','a' => $data[7] );
-      $rec->insert_grouped_field($fld);
-   }
-    
+   my $fld245 = MARC::Field->new( 245,' ',' ','9' => "TEMP" ); 
    if ($data[10] ne q{}){
-      my $fld = MARC::Field->new( 245,' ',' ','a' => $data[10] );
-      $rec->insert_grouped_field($fld);
+      $fld245->update('a' => $data[10] );
    }
+   elsif ($data[9] ne q{}){
+      $fld245->update('a' => $data[9] );
+   }
+   if ($data[7] ne q{}){
+      $fld245->update('c' => $data[7] );
+   }
+   $fld245->delete_subfield(code => '9');
+   $rec->insert_grouped_field($fld245);
     
    if ($data[11] ne q{}){
       my $fld = MARC::Field->new( 250,' ',' ','a' => $data[11] );
@@ -176,10 +189,16 @@ while (my $line=readline($in)){
       $valid_260=1;
    }
     
-   if ($data[13] ne q{}){
-      $fld260->update('c' => $data[13] );
+   if ($data[15] ne q{}){
+      $fld260->update('c' => $data[15] );
       $valid_260=1;
-      my $fld = MARC::Field->new('008','      s'.$data[13]);
+      my $fld = MARC::Field->new('008','      s'.$data[15]);
+      $rec->insert_fields_ordered($fld);
+   }
+   if ($data[18] ne q{}){
+      $fld260->update('c' => $data[18] );
+      $valid_260=1;
+      my $fld = MARC::Field->new('008','      s'.$data[18]);
       $rec->insert_fields_ordered($fld);
    }
    
@@ -196,11 +215,13 @@ while (my $line=readline($in)){
                                     'g' => $subj);
       $rec->insert_grouped_field($fld);
    }
-   else{
-      if ($data[19] ne q{}){
-         my $fld = MARC::Field->new( 300,' ',' ','a' => $data[19]);
-         $rec->insert_grouped_field($fld);
-      }
+   if ($data[16] ne q{}){
+      my $fld = MARC::Field->new( 440,' ',' ','a' => $data[16]);
+      $rec->insert_grouped_field($fld);
+   }
+   if ($data[19] ne q{}){
+      my $fld = MARC::Field->new( 300,' ',' ','a' => $data[19]);
+      $rec->insert_grouped_field($fld);
    }
 
    if ($data[22] ne q{}){
@@ -220,7 +241,7 @@ while (my $line=readline($in)){
 
    if ($data[25] ne q{}){
       my ($first,$rest) = split(/\-\-/,$data[25],2);
-      my $fld = MARC::Field->new( 650,' ',' ','a' => $first );
+      my $fld = MARC::Field->new( 653,' ',' ','a' => $first );
       if ($rest){
          foreach my $this (split(/\-\-/,$rest)){
             $fld->add_subfields( 'x' => $this);
@@ -244,7 +265,7 @@ while (my $line=readline($in)){
 
    if ($data[27] ne q{}){
       my ($first,$rest) = split(/\-\-/,$data[27],2);
-      my $fld = MARC::Field->new( 650,' ',' ','a' => $first );
+      my $fld = MARC::Field->new( 690,' ',' ','a' => $first );
       if ($rest){
          foreach my $this (split(/\-\-/,$rest)){
             $fld->add_subfields( 'x' => $this);
@@ -264,7 +285,32 @@ while (my $line=readline($in)){
    }
 
    if ($data[43] ne q{}){
-      my $fld = MARC::Field->new( 500,' ',' ','a' => $data[43] );
+      my $fld = MARC::Field->new( 590,' ',' ','a' => $data[43] );
+      $rec->insert_grouped_field($fld);
+   }
+
+   if ($data[30] ne q{}){
+      my $fld = MARC::Field->new( 948,' ',' ','a' => $data[30] );
+      $rec->insert_grouped_field($fld);
+   }
+
+   if ($data[31] ne q{}){
+      my $fld = MARC::Field->new( 590,' ',' ','a' => $data[31] );
+      $rec->insert_grouped_field($fld);
+   }
+    
+   if ($data[32] ne q{}){
+      my $fld = MARC::Field->new( 946,' ',' ','a' => $data[32] );
+      $rec->insert_grouped_field($fld);
+   }
+    
+   if ($data[33] ne q{}){
+      my $fld = MARC::Field->new( 947,' ',' ','a' => $data[33] );
+      $rec->insert_grouped_field($fld);
+   }
+    
+   if ($data[34] ne q{}){
+      my $fld = MARC::Field->new( 949,' ',' ','a' => $data[34] );
       $rec->insert_grouped_field($fld);
    }
     
@@ -294,11 +340,23 @@ while (my $line=readline($in)){
                                    'a' => $locations{$loc},
                                    'b' => $locations{$loc},
                                    'p' => 'TMP-'.$i.'-'.$locations{$loc});
-      if ($loc eq "Online"){
-         $fld->update( 'y' => 'ONLINE','o' => 'Online' );
+      if ($loc eq "Internet"){
+         $fld->update( 'y' => 'REF','o' => 'Online', '7' => 3 );
       }
       else{
-         $fld->update( 'y' => 'TMP' );
+         if ($locations{$loc} eq "CLEVELAND" || $locations{$loc} eq "ATLANTA"){
+            $fld->update( 'y' => 'CIRC' );
+         }
+         else {
+            $fld->update( 'y' => 'REF' );
+         }
+      }
+      if ($data[3] ne q{}){
+         $fld->update('o' => $data[3] );
+      }
+
+      if ($data[4] ne q{}){
+         $fld->update( 'o' => 'Vertical file drawer '.$data[4] );
       }
       $rec->insert_grouped_field($fld);
    }

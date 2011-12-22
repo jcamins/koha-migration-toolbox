@@ -227,7 +227,7 @@ MATCH:
       }
 
       if (defined $columns[16]) {
-         $item{copy_number} = $columns[16];
+         $item{enumchron} = $columns[16];
       }
 
       $item{price} = $price;
@@ -238,12 +238,12 @@ MATCH:
       if (defined $columns[20]){
          @subcolumns = split /$subfield_sep/, $columns[20];
          foreach my $subcolumn (@subcolumns){
-            $item{note} .= ' '.$subcolumn;
+            $item{nonpublic_note} .= ' '.$subcolumn;
          }
       }
  
       if (defined $columns[21]) {
-         $item{nonpublic_note} = $columns[21];
+         $item{nonpublic_note} .= ' ' .$columns[21];
       }
 
       if ($item{barcode} eq $NULL_STRING 
@@ -274,7 +274,7 @@ MATCH:
       $field->update( 'l' => $item{checkouts} )      if ($item{checkouts});
       $field->update( 'o' => $item{itemcallnumber} ) if ($item{itemcallnumber});
       $field->update( 's' => $item{last_borrowed} )  if ($item{last_borrowed});
-      $field->update( 't' => $item{copy_number} )    if ($item{copy_number});
+      $field->update( 'h' => $item{enumchron} )      if ($item{enumchron});
       $field->update( 'x' => $item{nonpublic_note} ) if ($item{nonpublic_note});
       $field->update( 'z' => $item{note} )           if ($item{note});
       $field->update( '8' => $item{collcode} )       if ($item{collcode});

@@ -13,7 +13,6 @@
 #
 # DOES:
 #   -trolls the Koha database for biblios containing a specified tag, and deletes them, if --update is specified
-#    with LC standard to 490/830.
 #
 # CREATES:
 #   -nothing

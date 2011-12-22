@@ -1,5 +1,5 @@
-SET foreign_key_checks=0;
 
+SET foreign_key_checks=0;
 
 RENAME TABLE reserves TO harley_reserves;
 RENAME TABLE old_reserves TO harley_old_reserves;
@@ -68,48 +68,5 @@ INSERT INTO old_reserves
     priority,found,timestamp,itemnumber,waitingdate) 
    SELECT borrowernumber,reservedate,biblionumber,constrainttype,branchcode,notificationdate,reminderdate,cancellationdate,reservenotes,
     priority,found,timestamp,itemnumber,waitingdate FROM harley_old_reserves;
-
-ALTER TABLE borrowers DROP COLUMN disable_reading_history;
-ALTER TABLE borrowers DROP COLUMN amount_notify_date;
-ALTER TABLE deletedborrowers DROP COLUMN disable_reading_history;
-ALTER TABLE deletedborrowers DROP COLUMN amount_notify_date;
-ALTER TABLE issuingrules DROP COLUMN max_fine;
-ALTER TABLE issuingrules DROP COLUMN max_holds;
-DROP TABLE import_profiles;
-DROP TABLE import_profile_added_items;
-DROP TABLE import_profile_subfield_actions;
-ALTER TABLE itemtypes DROP COLUMN reservefee;
-DROP TABLE overdueitemrules;
-DROP TABLE itemdeletelist;
-ALTER TABLE items DROP COLUMN otherstatus;
-ALTER TABLE deleteditems DROP COLUMN otherstatus;
-ALTER TABLE items DROP COLUMN suppress;
-ALTER TABLE deleteditems DROP COLUMN suppress;
-
-DELETE FROM marc_subfield_structure WHERE tagfield="952" AND tagsubfield="i";
-DELETE FROM marc_subfield_structure WHERE tagfield="952" AND tagsubfield="k";
-DELETE FROM marc_subfield_structure WHERE tagfield="952" AND tagsubfield="C";
-
-DROP TABLE clubsAndServices;
-DROP TABLE clubsAndServicesArchetypes;
-DROP TABLE clubsAndServicesEnrollments;
-
-DROP TABLE courses;
-DROP TABLE instructor_course_link;
-DROP TABLE course_reserves;
-DELETE FROM authorised_values WHERE category = "DEPARTMENT";
-DELETE FROM authorised_values WHERE category = "TERM";
-
-DELETE FROM marc_subfield_structure where tagfield="658";
-ALTER TABLE authorised_values CHANGE opaclib lib_opac varchar(80) DEFAULT NULL;
-ALTER TABLE issuingrules DROP COLUMN holdallowed;
-ALTER TABLE issuingrules ADD COLUMN finedays int(11) DEFAULT NULL;
-
-DELETE FROM issues WHERE itemnumber IS NULL;
-
-
-
-
-
 
 

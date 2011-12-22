@@ -566,7 +566,7 @@ if ($items_file) {
 # OK, if we're here, everything has loaded. Now to start processing the file.
 my $csv = Text::CSV_XS->new({
         binary  => 1,   # binary handles funny line endings and macrons etc.
-        eol     => $/,
+        eol     => "\r\n",
         allow_loose_quotes => $loosequotes,
         escape_char => ( $loosequotes ? '' : '"'),
     	sep_char => $field_sep_char,

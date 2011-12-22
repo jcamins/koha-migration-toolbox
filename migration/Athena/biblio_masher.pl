@@ -215,8 +215,9 @@ while () {
       }
       $keeper_itype=$itype{$barcode};
 
-      if ($field->subfield('k')){
-         $loc{$barcode} = uc($field->subfield('k'));
+#BoulderJCC used subfield b as location.  changed code from subfield k to b
+      if ($field->subfield('b')){
+         $loc{$barcode} = uc($field->subfield('b'));
          if (exists($shelfloc_map{$loc{$barcode}})){
             $loc{$barcode} = $shelfloc_map{$loc{$barcode}};
          }
@@ -228,9 +229,12 @@ while () {
          }
       }
 
-      $acqsource{$barcode} = $field->subfield('7');
+#BoulderJCC used 5 as Vendor not 7 - changed subfield
+      $acqsource{$barcode} = $field->subfield('5');
 
       $itemnote{$barcode} = $field->subfield('z');
+#BJCC- added line to place source of acqusition donation, etc in nonpublic note
+      $item_hidden_note{$barcode} = $field->subfield('7');
 
       $homebranch{$barcode} = $branch if (!$homebranch{$barcode});
       if (exists($branch_map{$homebranch{$barcode}})){

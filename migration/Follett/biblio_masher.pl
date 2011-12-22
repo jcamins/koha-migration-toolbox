@@ -221,6 +221,15 @@ while () {
            else {$itype{$barcode}="UNKNOWN";}
           if (exists($shelfloc_map{$begincall})){
             $loc{$barcode} = $shelfloc_map{$begincall};
+#map for MCD J123
+              if ($midcall) {
+                $loc{$barcode} = "CHILDRENS" if ( $midcall =~ m/J[0-9]/ );
+                }
+              if ($remainder) {
+                $loc{$barcode} = "CHILDRENS" if ( $remainder =~ m/Juv/ );
+                }
+
+#end this snippet of code
             $loccount{$loc{$barcode}}++;
            }
           if (exists($collcode_map{$begincall})){
@@ -299,7 +308,7 @@ while () {
            $holdbranch{$barcode} = $homebranch{$barcode};
            }
            else {
-	   $homebranch{$barcode} = "UNKNOWN";
+	   $homebranch{$barcode} = "DONITROY";
            $branchcount{$homebranch{$barcode}}++;
            $holdbranch{$barcode} = $homebranch{$barcode};
            }
@@ -314,8 +323,12 @@ while () {
   	if ( $voldesc{$barcode} && $volnum{$barcode} ) {
         $enumchron{$barcode} = $voldesc{$barcode} . $volnum{$barcode};
         }
-
+        if ($subsubfield eq 'i' ) {
+        $enumchron{$barcode} = substr $newsubfield, 1;
+        $itemcall{$barcode} = $itemcall{$barcode} . " " . $enumchron{$barcode};
+        }         
       }  
+
 ##################852$x@parsing end.
 
       my $thisprice=0;

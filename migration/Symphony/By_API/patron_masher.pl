@@ -28,6 +28,8 @@ my $upcase_name=0;
 my $cat1_tag = "";
 my $cat2_tag = "";
 my $cat3_tag = "";
+my $cat4_tag = "";
+my $cat5_tag = "";
 my $default_privacy = 0;
 
 GetOptions(
@@ -39,6 +41,8 @@ GetOptions(
     'cat1=s'          => \$cat1_tag,
     'cat2=s'          => \$cat2_tag,
     'cat3=s'          => \$cat3_tag,
+    'cat4=s'          => \$cat4_tag,
+    'cat5=s'          => \$cat5_tag,
     'default_privacy=s' => \$default_privacy,
     'upcase_name'     => \$upcase_name,
     'debug'           => \$debug,
@@ -92,6 +96,8 @@ my %categories;
 my %cat1s;
 my %cat2s;
 my %cat3s;
+my %cat4s;
+my %cat5s;
 my %branches;
 my $addedcode;
 my @borrower_fields = qw /cardnumber          surname
@@ -99,7 +105,8 @@ my @borrower_fields = qw /cardnumber          surname
                           othernames          initials
                           streetnumber        streettype
                           address             address2
-                          city                zipcode
+                          city                state
+                          zipcode
                           country             email
                           phone               mobile
                           fax                 emailpro
@@ -172,7 +179,7 @@ while (my $line = readline($in)) {
       $toss_this_borrower=0;
       %thisborrower=();
       $addedcode=q{};
-      $thisborrower{'contactnote'} = "";
+      $thisborrower{'borrowernotes'} = "";
       next;
    }
    next if ($toss_this_borrower);
@@ -185,13 +192,13 @@ while (my $line = readline($in)) {
    
    $note = 0 if ($thistag);
    if (($thistag eq "NOTE") or ($thistag eq "COMMENT") or ($thistag eq "WEBCATPREF")){
-      $thisborrower{'contactnote'} .= " -- " if $thisborrower{'contactnote'};
-      $thisborrower{'contactnote'} .= $content." ";
+      $thisborrower{'borrowernotes'} .= " -- " if $thisborrower{'borrowernotes'};
+      $thisborrower{'borrowernotes'} .= $content." ";
       $note = 1;
       next;
    }
    if (($thistag eq "") && $note){
-      $thisborrower{'contactnote'} .= $line." ";
+      $thisborrower{'borrowernotes'} .= $line." ";
       next;
    }
 
@@ -207,7 +214,7 @@ while (my $line = readline($in)) {
          $toss_this_borrower=1;
          next;
       }
-      if ($content =~ /([\w\s\-]+),(.*)/){
+      if ($content =~ /(.*?),(.*)/){
          $thisborrower{'surname'} = $1;
          $thisborrower{'firstname'} = $2;
       }
@@ -256,7 +263,7 @@ while (my $line = readline($in)) {
    $thisborrower{'cardnumber'} = $content if ($thistag eq "USER_ID");
    $thisborrower{'userid'} = $content if ($thistag eq "USER_ID");
    $thisborrower{'password'} = $content if ($thistag eq "USER_PIN");
-   $thisborrower{'debarred'} = 1 if (($thistag eq "USER_STATUS") && ($content eq "BARRED"));
+   $thisborrower{'debarred'} = "2099-12-31" if (($thistag eq "USER_STATUS") && ($content eq "BARRED"));
    $thisborrower{'dateenrolled'} = _process_date($content) if ($thistag eq "USER_PRIV_GRANTED");
    $thisborrower{'dateexpiry'} = _process_date($content) if ($thistag eq "USER_PRIV_EXPIRES");
    if ($thisborrower{'dateexpiry'} eq q{}){
@@ -279,6 +286,18 @@ while (my $line = readline($in)) {
    if ($thistag eq "USER_CATEGORY3" && $cat3_tag ne q{}){
       $addedcode .= ",$cat3_tag:$content";
       $cat3s{$content}++;
+      next;
+   }
+
+   if ($thistag eq "USER_CATEGORY4" && $cat4_tag ne q{}){
+      $addedcode .= ",$cat4_tag:$content";
+      $cat4s{$content}++;
+      next;
+   }
+
+   if ($thistag eq "USER_CATEGORY5" && $cat5_tag ne q{}){
+      $addedcode .= ",$cat5_tag:$content";
+      $cat5s{$content}++;
       next;
    }
 
@@ -332,8 +351,8 @@ while (my $line = readline($in)) {
             $thisborrower{'email'} = $content;
             next;
          }
-         $thisborrower{'contactnote'} .= " -- " if $thisborrower{'contactnote'};
-         $thisborrower{'contactnote'} .= $content." ";
+         $thisborrower{'borrowernotes'} .= " -- " if $thisborrower{'borrowernotes'};
+         $thisborrower{'borrowernotes'} .= $content." ";
       }
       $thisborrower{'phone'} = $content if ($thistag eq "DAYPHONE");
       $thisborrower{'phone'} = $content if ($thistag eq "PHONE");
@@ -401,6 +420,16 @@ print "\nUSER CAT3 COUNTS\n";
 foreach my $kee (sort keys %cat3s){
    print "$kee: $cat3s{$kee}\n";
    print {$sql} "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('$cat3_tag','$kee','$kee');\n";
+}
+print "\nUSER CAT4 COUNTS\n";
+foreach my $kee (sort keys %cat4s){
+   print "$kee: $cat4s{$kee}\n";
+   print {$sql} "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('$cat4_tag','$kee','$kee');\n";
+}
+print "\nUSER CAT5 COUNTS\n";
+foreach my $kee (sort keys %cat5s){
+   print "$kee: $cat5s{$kee}\n";
+   print {$sql} "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('$cat5_tag','$kee','$kee');\n";
 }
 close $sql;
 

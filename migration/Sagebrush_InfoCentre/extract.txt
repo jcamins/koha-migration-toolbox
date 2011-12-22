@@ -21,14 +21,48 @@ Click on Options in the left window pane.
 Select Overwrite the existing database (with Replace)
 Click OK
 
-After restored.
-Click on New Query
+After restored. Click on New Query
+
+
+*******************
+METHOD 2
+
+You can also access if they send you a copy of the IC.mdf AND the IC_log.mdf files.  
+Place these in the following directory:
+c:\Program Files\Microsoft SQL Server\MSSQL10_50.SQLEXPRESS\MSSQL\DATA\
+
+In SQL Server Management Studio: 
+Right click on Database and select Attach
+Click on Add button
+Select IC.mdf from the directory
+click OK
+
+Run queries.
+
+
+***************
+
+QUERIES
+
 Right click to select "design editor" (graphical interface ala Access db)
-or enter the query below and click Execute! to see circulation data.
+or enter the query below and click Execute! 
 
+CIRCULATION
 
-SELECT     Sagebrush.checkouts.*, Sagebrush.copies.copy_oid AS Expr1, Sagebrush.copies.copy_id, Sagebrush.copies.call_number, Sagebrush.patrons.patron_oid AS Expr2, 
+SELECT     Sagebrush.checkouts.*, Sagebrush.copies.copy_oid AS Expr1, Sagebrush.copies.copy_id, Sagebrush.copies.call_number, Sagebrush.patrons.patron_oid $
                       Sagebrush.patrons.patron_id, Sagebrush.patrons.surname, Sagebrush.patrons.first_name
 FROM         Sagebrush.copies INNER JOIN
                       Sagebrush.checkouts ON Sagebrush.copies.copy_oid = Sagebrush.checkouts.copy_oid INNER JOIN
                       Sagebrush.patrons ON Sagebrush.checkouts.patron_oid = Sagebrush.patrons.patron_oid
+
+The copy_id is the itembarcode (852$p) and the patron_id is the patron cardnumber.
+
+
+PATRON extract
+
+SELECT     Sagebrush.patrons.patron_id, Sagebrush.patrons.privileges_expire, Sagebrush.patrons.first_name, Sagebrush.patrons.middle_name, Sagebrush.patrons.surname, 
+                      Sagebrush.patrons.email, Sagebrush.patrons.phone, Sagebrush.patrons.other_phone, Sagebrush.patrons.address1, Sagebrush.patrons.address2, 
+                      Sagebrush.patrons.city, Sagebrush.patrons.province_state, Sagebrush.patrons.postal_zip, Sagebrush.patrons.user_defined1, Sagebrush.patrons.user_defined2, 
+                      Sagebrush.patrons.user_defined3, Sagebrush.patron_types.type_name
+FROM         Sagebrush.patrons INNER JOIN
+                      Sagebrush.patron_types ON Sagebrush.patrons.patron_type_oid = Sagebrush.patron_types.patron_type_oid

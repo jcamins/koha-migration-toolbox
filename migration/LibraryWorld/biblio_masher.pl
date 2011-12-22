@@ -43,6 +43,7 @@ my %damaged_map;
 my $notforloan_map_name = "";
 my %notforloan_map;
 my $default_branch = "";
+my $holding_to_coll = 0;
 my $drop_noitem = 0;
 
 
@@ -61,6 +62,7 @@ GetOptions(
     'damaged_map=s' => \$damaged_map_name,
     'nfl_map=s'     => \$notforloan_map_name,
     'drop_noitem'   => \$drop_noitem,
+    'holding_to_coll' => \$holding_to_coll,
     'debug'         => \$debug,
 );
 
@@ -233,7 +235,14 @@ ITMFIELD:
       $itype{$barcode} = $this_itype;
       $loc{$barcode} = $field->subfield('k') || "";
       $itemcall{$barcode} = $field->subfield('h') || "";
-      $collcode{$barcode} = $field->subfield('j') || "";
+      if ($holding_to_coll){
+         $collcode{$barcode} = $field->subfield('b');
+         $homebranch{$barcode} = $default_branch;
+      }
+      else {
+         $collcode{$barcode} = $field->subfield('j') || "";
+         $homebranch{$barcode} = $field->subfield('b');
+      }
 
       if (exists $type_loc_map{$this_itype}{$loc{$barcode}}){
          $itype{$barcode} =  $type_loc_map{$this_itype}{$loc{$barcode}};
@@ -260,7 +269,6 @@ ITMFIELD:
       $collcode{$barcode} = undef if ($collcode{$barcode} eq q{});
       $collcode_counts{$collcode{$barcode}}++ if $collcode{$barcode};
 
-      $homebranch{$barcode} = $field->subfield('b');
       if ( exists $branch_map{$homebranch{$barcode}}){
          $homebranch{$barcode} = $branch_map{$homebranch{$barcode}};
       }
@@ -285,28 +293,28 @@ ITMFIELD:
          $itemnote{$barcode} = $field->subfield('z');
       }
      
-      if ($field->subfield('c') ne q{}){
+      if ($field->subfield('c')){
          my $year = substr($field->subfield('c'),0,4);
          my $month = substr($field->subfield('c'),4,2);
          my $day = substr($field->subfield('c'),6,2);
          $acqdate{$barcode} = sprintf "%d-%02d-%02d",$year,$month,$day;
       }
-      if ($field->subfield('6') ne q{}){
+      if ($field->subfield('6')){
          my $year = substr($field->subfield('6'),0,4);
          my $month = substr($field->subfield('6'),4,2);
          my $day = substr($field->subfield('6'),6,2);
          $lastseen{$barcode} = sprintf "%d-%02d-%02d",$year,$month,$day;
       }
-      if ($field->subfield('g') ne q{}){
+      if ($field->subfield('g')){
          $issues{$barcode} = $field->subfield('g');
       }
-      if ($field->subfield('u') ne q{}){
+      if ($field->subfield('u')){
          $renews{$barcode} = $field->subfield('u');
       }
-      if ($field->subfield('v') ne q{}){
+      if ($field->subfield('v')){
          $holds{$barcode} = $field->subfield('v');
       }
-      if ($field->subfield('m') ne q{}){
+      if ($field->subfield('m')){
          my $year = substr($field->subfield('m'),0,4);
          my $month = substr($field->subfield('m'),4,2);
          my $day = substr($field->subfield('m'),6,2);
@@ -315,7 +323,7 @@ ITMFIELD:
       if ($field->subfield('t') ne q{}){
          $copynum{$barcode} = $field->subfield('t');
       }
-      my $status = $field->subfield('a');
+      my $status = $field->subfield('a') || '';
       if (exists $notforloan_map{$status}){
          $notforloanstat{$barcode} = $notforloan_map{$status};
       }

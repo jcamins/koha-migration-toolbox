@@ -33,6 +33,7 @@ my %collcode_map;
 my $default_branch = "";
 my $default_itype = "";
 my $drop_noitem = 0;
+my $barcode_prefix = "";
 
 
 GetOptions(
@@ -42,9 +43,10 @@ GetOptions(
     'itype_map=s'   => \$itype_map_name,
     'loc_map=s'     => \$loc_map_name,
     'collcode_map=s' => \$collcode_map_name,
-    'def_branch=s'  => \$default_branch,
-    'def_itype=s'   => \$default_itype,
+    'default_branch=s'  => \$default_branch,
+    'default_itype=s'   => \$default_itype,
     'drop_noitem'   => \$drop_noitem,
+    'bar_prefix=s'    => \$barcode_prefix,
     'debug'         => \$debug,
 );
 
@@ -145,11 +147,12 @@ ITMFIELD:
    foreach my $field ($record->field("952")){
       $j++;
 
-      my $barcode = $field->subfield('p');
+      my $barcode = $field->subfield('p') || $barcode_prefix.sprintf "%06d",$j;
       $itype{$barcode} = $field->subfield('y') || $default_itype;
       $loc{$barcode} = $field->subfield('c') || "";
       $itemcall{$barcode} = $field->subfield('o') || "";
       $collcode{$barcode} = $field->subfield('8') || "";
+      $collcode{$barcode} =~ s/[\n\t\"\']//g;
 
       if (exists $itype_map{$itype{$barcode}}){
          $itype{$barcode} = $itype_map{$itype{$barcode}};

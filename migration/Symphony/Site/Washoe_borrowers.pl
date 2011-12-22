@@ -72,7 +72,7 @@ while (my $borrower = $sth->fetchrow_hashref()) {
    if ($doo_eet) {
       ModMember(borrowernumber => $borrower->{borrowernumber},
                 categorycode   => 'JUV',
-                debarred       => 1,
+                debarred       => '2099-12-31',
                );
    }
 }
@@ -92,7 +92,7 @@ while (my $borrower = $sth->fetchrow_hashref()) {
    if ($doo_eet) {
       ModMember(borrowernumber => $borrower->{borrowernumber},
                 categorycode   => 'ADULT',
-                debarred       => 1,
+                debarred       => '2099-12-31',
                );
    }
 }
@@ -112,7 +112,7 @@ while (my $borrower = $sth->fetchrow_hashref()) {
    if ($doo_eet) {
       ModMember(borrowernumber => $borrower->{borrowernumber},
                 categorycode   => 'JUV',
-                debarred       => 1,
+                debarred       => '2099-12-31',
                );
       $attribute_insert_sth->execute($borrower->{borrowernumber});
    }
@@ -133,7 +133,7 @@ while (my $borrower = $sth->fetchrow_hashref()) {
    if ($doo_eet) {
       ModMember(borrowernumber => $borrower->{borrowernumber},
                 categorycode   => 'ADULT',
-                debarred       => 1,
+                debarred       => '2099-12-31',
                );
       $attribute_insert_sth->execute($borrower->{borrowernumber});
    }

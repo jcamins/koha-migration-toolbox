@@ -83,7 +83,7 @@ ITMRECORD:
       }
       $branch_counts{$field->subfield('b')}++;
       $loc_counts{$field->subfield('k')}++;
-      $status_counts{$field->subfield('a')}++;
+      $status_counts{$field->subfield('a')}++ if ($field->subfield('a'));
       $collname_counts{$field->subfield('j')}++;
       $itype_counts{$itype}++;
    }

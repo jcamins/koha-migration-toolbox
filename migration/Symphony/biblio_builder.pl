@@ -301,7 +301,7 @@ while () {
          $withdrawn{$barcode} = 1;
       }
 
-      if ($loc{$barcode} eq "LOST" || $loc{$barcode} eq "LOST_ASSUM"){
+      if ($loc{$barcode} =~ /^LOST/){
          $itmlost{$barcode} = 1;
       }
 
