@@ -460,11 +460,11 @@ while() {
                $field->update( 'v' => $default_price);
          }
 
-         if (!field->subfield('g') && exists $pricemap{$field->subfield('y')}) {
+         if (!$field->subfield('g') && exists $pricemap{$field->subfield('y')}) {
                $field->update( 'g' => $pricemap{$field->subfield('y')});
          }
 
-         if (!field->subfield('v') && exists $pricemap{$field->subfield('y')}) {
+         if (!$field->subfield('v') && exists $pricemap{$field->subfield('y')}) {
                $field->update( 'v' => $pricemap{$field->subfield('y')});
          }
 
