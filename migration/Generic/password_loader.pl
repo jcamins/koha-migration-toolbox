@@ -45,6 +45,7 @@ while (my $row=$csv->getline($io)){
    print "\r$i" unless ($i % 100);
 
    my @data = @$row;
+   next if $data[1] eq '';
    my $password = md5_base64($data[1]);
 
    $debug and print "setting $data[0]...$password\n";

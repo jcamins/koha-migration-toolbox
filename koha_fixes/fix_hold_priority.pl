@@ -55,7 +55,7 @@ print OUT "Biblionumber, Borrowernumber, Reserve Date, Old Priority, New Priorit
 my $dbh = C4::Context->dbh;
 my $query = "SELECT biblionumber, ";
 if (defined $aggressive) {
-  $query .= "count(priority) as countp FROM reserves GROUP BY biblionumber HAVING countp > 1";
+  $query .= "count(priority) as countp FROM reserves GROUP BY biblionumber ";
 } else {
   $query .= "max(priority) as maxp, min(priority) as minp, count(priority) as countp FROM reserves GROUP BY biblionumber HAVING maxp > countp AND minp > 0";
 }

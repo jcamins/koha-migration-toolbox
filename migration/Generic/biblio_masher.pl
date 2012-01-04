@@ -223,16 +223,16 @@ if ($input_item_filename ne $NULL_STRING) {
    my $items_dropped = 0;
    print "Loading item data into memory:\n";
    my $csv=Text::CSV_XS->new({ binary => 1, sep_char => $delimiter{$csv_delim} });
-   $debug and print Dumper($csv);
+   #$debug and print Dumper($csv);
    open my $item_file,'<',$input_item_filename;
    $csv->column_names($csv->getline($item_file)); 
 ITEM:
    while (my $itemline = $csv->getline_hr($item_file)) {
-      last ITEM if ($debug && $j>9);
+      #last ITEM if ($debug && $j>9);
       $j++;
       print '.'    unless ($j % 10);
       print "\r$j" unless ($j % 100);
-      $debug and print Dumper($itemline);
+      #$debug and print Dumper($itemline);
       if ($itemline->{$match_csv}){
          my ($key,undef) = split (/ /,$itemline->{$match_csv});
          push(@{$itemhash{$key}}, $itemline);
@@ -303,7 +303,7 @@ while() {
       last if ($default_callnumber ne $NULL_STRING);
    }
 
-   my $default_price = $NULL_STRING;
+   my $default_price = 0;
    foreach my $try (@pricedefault){
       if ($try ne $NULL_STRING) {
          my $tag = substr($try,0,3);
@@ -315,7 +315,7 @@ while() {
             $default_price =~ s/\$//g;
          }
       }
-      last if ($default_price ne $NULL_STRING);
+      last if ($default_price != 0);
    }
 
    my @matches;
@@ -465,6 +465,14 @@ while() {
          }
 
          if (!$field->subfield('v') && exists $pricemap{$field->subfield('y')}) {
+               $field->update( 'v' => $pricemap{$field->subfield('y')});
+         }
+
+         if ($field->subfield('g')==0 && exists $pricemap{$field->subfield('y')}) {
+               $field->update( 'g' => $pricemap{$field->subfield('y')});
+         }
+
+         if ($field->subfield('v')==0 && exists $pricemap{$field->subfield('y')}) {
                $field->update( 'v' => $pricemap{$field->subfield('y')});
          }
 
