@@ -1,10 +1,12 @@
 #!/usr/bin/perl
 #---------------------------------
-# Copyright 2010 ByWater Solutions
+# Copyright 2012 ByWater Solutions
 #
 #---------------------------------
 #
-# -<author>
+# -<original author>
+# 
+# Modification log: (initial and date)
 #
 #---------------------------------
 #
@@ -36,10 +38,12 @@ Readonly my $NULL_STRING   => q{};
 my $debug   = 0;
 my $doo_eet = 0;
 my $i       = 0;
+my $j       = 0;
+my $k       = 0;
 my $written = 0;
 my $problem = 0;
 
-my $input_filename = "";
+my $input_filename = $NULL_STRING;
 
 GetOptions(
     'in=s'     => \$input_filename,

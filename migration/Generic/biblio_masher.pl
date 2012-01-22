@@ -42,6 +42,7 @@
 #
 #   For mashing in data in a separate item file:
 #   --matchpoint=<marc>:<colhead>   Matches a MARC field/subfield to a column in the csv, for use as the matching point.
+#   --headerrow=<headerrow>         If the file doesn't contain a header row, use this.
 #   --itemcol=<colhead>:<marcsub><~tool><~tool>
 #                    Inserts data from the named column into the 952 subfield listed; i.e. BARCODE:p.  Repeatable.  Suffixable by a tool
 #                    for data cleanup, which is also repeatable:
@@ -50,6 +51,7 @@
 #           date2    Tidies up all-numeric dates, renders in ISO form
 #           money    Strips dollar sign, leaves only the numeric part
 #           if:<data> Only makes the assignment if <data> is present in the incoming data (and strips it out!)
+#           div:<num>  Divides the value by <num>
 #                              
 #   For mashing embedded item data:
 #   --itemtag=<marc>  Designates which field contains items
@@ -96,6 +98,7 @@ my $barprefix            = $NULL_STRING;
 my $itemtag              = $NULL_STRING;
 my $charset              = 'marc8';
 my $csv_delim            = 'comma';
+my $header_row           = $NULL_STRING;
 my $pricemap_filename    = $NULL_STRING;
 my %pricemap;
 my @datamap_filenames;
@@ -120,6 +123,7 @@ GetOptions(
     'delimiter=s'  => \$csv_delim,
     'barprefix=s'  => \$barprefix,
     'barlength=i'  => \$barlength,
+    'headerrow=s'  => \$header_row,
     'pricemap=s'   => \$pricemap_filename,
     'calldefault=s'=> \@calldefault,
     'pricedefault=s'=> \@pricedefault,
@@ -135,6 +139,7 @@ GetOptions(
 
 my %delimiter = ( 'comma' => ',',
                   'tab'   => "\t",
+                  'pipe'  => '|',
                 );
 
 for my $var ($input_marc_filename,$output_marc_filename,$output_xml_filename) {
@@ -147,17 +152,20 @@ if (($input_item_filename ne $NULL_STRING) && ($matchpoint eq $NULL_STRING)){
 
 my ($match_marc,$match_csv);
 my $match_marc_subfield;
+my $match_tool = $NULL_STRING;
 if ($matchpoint ne $NULL_STRING) {
+   ($matchpoint,$match_tool) = split(/~/,$matchpoint);
    ($match_marc,$match_csv) = split(/:/,$matchpoint);
    if (!$match_marc || !$match_csv) {
       croak ("Ill-formed matchpoint!\n");
    }
 }
-
 my @item_mapping;
 foreach my $map (@itemcol) {
-   my ($col, $field) = $map =~ /^(.*?):(.*)$/;
-   if (!$col || !$field){
+   my $col   = $NULL_STRING;
+   my $field = $NULL_STRING;
+   ($col, $field) = $map =~ /^(.*?):(.*)$/;
+   if (($col eq $NULL_STRING) || ($field eq $NULL_STRING)){
       croak ("--itemcol=$map is ill-formed!\n");
    }
    push @item_mapping, {
@@ -225,7 +233,13 @@ if ($input_item_filename ne $NULL_STRING) {
    my $csv=Text::CSV_XS->new({ binary => 1, sep_char => $delimiter{$csv_delim} });
    #$debug and print Dumper($csv);
    open my $item_file,'<',$input_item_filename;
-   $csv->column_names($csv->getline($item_file)); 
+   if ($header_row ne $NULL_STRING){
+      my @headers = split (/,/,$header_row);
+      $csv->column_names(@headers);
+   }
+   else{
+      $csv->column_names($csv->getline($item_file)); 
+   }
 ITEM:
    while (my $itemline = $csv->getline_hr($item_file)) {
       #last ITEM if ($debug && $j>9);
@@ -255,6 +269,7 @@ my %locationcounts;
 my %ccodecounts;
 my %callschemecounts;
 my $xml=0;
+my $dropped_itype=0;
 
 my $input_file = IO::File->new($input_marc_filename);
 my $batch      = MARC::Batch->new('USMARC',$input_file);
@@ -273,6 +288,7 @@ while() {
    last RECORD if ($debug && $i>10);
    my $record;
    my $keep_itype;
+   my $keep_issues = 0;
    my $there_are_items = 0;
    eval {$record = $batch->next();};
    if ($@) {
@@ -335,12 +351,16 @@ while() {
          $match_string = $record->subfield($match_marc,$match_marc_subfield);
       }
       if ($match_string) {
+         if ($match_tool ne $NULL_STRING) {
+            $match_string =~ s/($match_tool)//;
+         }
          foreach (@{$itemhash{$match_string}}) {
             push (@matches,$_);
          }
       }
    }
 
+MATCH:
    foreach my $match (@matches) {
       $k++;
       my $field = MARC::Field->new('952',' ',' ','9' => 'temp');
@@ -398,10 +418,18 @@ while() {
          }
       }
 
+      if (!$field->subfield('y')) {
+         $dropped_itype++;
+         next MATCH;
+      }
+
       $homebranchcounts{$field->subfield('a')}++;
       $holdbranchcounts{$field->subfield('b')}++;
       $itypecounts{$field->subfield('y')}++;
       $keep_itype = $field->subfield('y');
+      if ($field->subfield('l')) {
+         $keep_issues += $field->subfield('l');
+      }
       if ($field->subfield('c')) {
          $locationcounts{$field->subfield('c')}++;
       }
@@ -417,6 +445,7 @@ while() {
    }
 
    if ($itemtag) {
+TAG:
       foreach my $field_in ($record->field($itemtag)) {
          $k++;
          my $field = MARC::Field->new('952',' ',' ','9' => 'temp');
@@ -501,10 +530,18 @@ while() {
             }
          }
 
+         if (!$field->subfield('y')) {
+            $dropped_itype++;
+            next TAG;
+         }
+
          $homebranchcounts{$field->subfield('a')}++;
          $holdbranchcounts{$field->subfield('b')}++;
          $itypecounts{$field->subfield('y')}++;
          $keep_itype = $field->subfield('y');
+         if ($field->subfield('l')) {
+            $keep_issues += $field->subfield('l');
+         }
          if ($field->subfield('c')) {
             $locationcounts{$field->subfield('c')}++;
          }
@@ -524,7 +561,9 @@ while() {
       if ($datamap{'y'}{$keep_itype}){
          $keep_itype = $datamap{'y'}{$keep_itype};
       }
-      my $field = MARC::Field->new('942',' ',' ','c' => $keep_itype);
+      my $field = MARC::Field->new('942',' ',' ','c' => $keep_itype, 
+                                                 '0' => $keep_issues,
+                                  );
       $record->insert_fields_ordered($field);
    }
 
@@ -628,6 +667,10 @@ sub _manipulate_data {
          $data = $NULL_STRING;
       }
    }
+   if ($tool =~ /^div:/) {
+      my (undef,$val) = split (/:/,$tool,2);
+      $data = $data / $val;
+   }
    if ($tool eq 'date') {
       $data =~ s/ //g;
       my ($month,$day,$year) = $data =~ /(\d+).(\d+).(\d+)/;
@@ -652,17 +695,22 @@ sub _manipulate_data {
    }
    if ($tool eq 'date2') {
       $data =~ s/ //g;
-      #$debug and print "BEFORE:$data\n";
-      my $year  = substr($data,0,4);
-      my $month = substr($data,4,2);
-      my $day   = substr($data,6,2);
-      if ($month && $day && $year){
-         $data = sprintf "%4d-%02d-%02d",$year,$month,$day;
+      if (length($data) == 8) {
+         $debug and print "BEFORE:$data\n";
+         my $year  = substr($data,0,4);
+         my $month = substr($data,4,2);
+         my $day   = substr($data,6,2);
+         if ($month && $day && $year){
+            $data = sprintf "%4d-%02d-%02d",$year,$month,$day;
+         $debug and print "AFTER:$data\n";
+         }
+         else {
+            $data= $NULL_STRING;
+         }
       }
       else {
-         $data= $NULL_STRING;
+         $data = $NULL_STRING;
       }
-      #$debug and print "AFTER:$data\n";
    }
    if ($tool eq 'date3') {
       my %months =(

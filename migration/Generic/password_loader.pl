@@ -34,6 +34,7 @@ if (($infile_name eq '')){
 my $csv=Text::CSV->new();
 my $dbh=C4::Context->dbh();
 my $i=0;
+my $written=0;
 
 my $upd_sth = $dbh->prepare("update borrowers set password=? where cardnumber=?");
 
@@ -50,8 +51,9 @@ while (my $row=$csv->getline($io)){
 
    $debug and print "setting $data[0]...$password\n";
    $doo_eet and $upd_sth->execute($password,$data[0]);
+   $written++;
 }
 
 close $io;
 
-print "\n$i records updated.\n";
+print "\n$i records read.\n$written records updated.\n";

@@ -53,13 +53,16 @@ if (($where_clause eq q{}) || ($field_to_change eq q{}) || ($new_value eq q{})){
    exit;
 }
 
+if ($new_value eq 'NULL') {
+   $new_value = undef;
+}
 my $written=0;
 my $dbh=C4::Context->dbh();
 my $sth=$dbh->prepare("SELECT itemnumber,$field_to_change FROM items WHERE $where_clause");
 $sth->execute();
 RECORD:
 while (my $row=$sth->fetchrow_hashref()){
-   last RECORD if ($debug and $i>10);
+   last RECORD if ($debug and $i>0);
    $i++;
    print "." unless ($i % 10);
    print "\r$i" unless ($i % 100);

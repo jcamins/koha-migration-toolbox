@@ -153,11 +153,11 @@ while (my $line=readline($in)){
    }
     
    my $fld245 = MARC::Field->new( 245,' ',' ','9' => "TEMP" ); 
-   if ($data[10] ne q{}){
-      $fld245->update('a' => $data[10] );
-   }
-   elsif ($data[9] ne q{}){
+   if ($data[9] ne q{}){
       $fld245->update('a' => $data[9] );
+   }
+   elsif ($data[10] ne q{}){
+      $fld245->update('a' => $data[10] );
    }
    if ($data[7] ne q{}){
       $fld245->update('c' => $data[7] );

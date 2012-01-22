@@ -32,6 +32,7 @@ GetOptions(
 
 my $dbh=C4::Context->dbh();
 my $i=0;
+my $written=0;
 my $query = "SELECT borrowernumber,cardnumber,userid,branchcode FROM borrowers";
 if ($branch ne q{}){
    $query .= " WHERE branchcode = '$branch'";
@@ -39,13 +40,16 @@ if ($branch ne q{}){
 
 my $find = $dbh->prepare($query);
 $find->execute();
+RECORD:
 while (my $row=$find->fetchrow_hashref()){
    $i++;
    print ".";
    print "\r$i" unless ($i % 100);
    $debug and print "Changing $row->{'cardnumber'} ($row->{'branchcode'}) \n";
+   next RECORD if ($row->{userid});
    $doo_eet and C4::Members::ModMember(borrowernumber => $row->{'borrowernumber'}, 
                                        userid         => $row->{'cardnumber'});
+   $written++;
 }
 
-print "\n$i records updated.\n";
+print "\n$i records reed.\n$written records updated.\n";

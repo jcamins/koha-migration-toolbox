@@ -31,6 +31,7 @@ use Readonly;
 use Text::CSV_XS;
 
 use MARC::File::USMARC;
+use MARC::File::XML;
 use MARC::Record;
 use MARC::Batch;
 use MARC::Charset;
@@ -49,26 +50,32 @@ my $problem = 0;
 my $input_filename               = $NULL_STRING;
 my $item_filename                = $NULL_STRING;
 my $output_filename              = $NULL_STRING;
-my $location_branch_map_filename = $NULL_STRING;
+my $output_xml_filename          = $NULL_STRING;
+my $output_fastadd_filename      = $NULL_STRING;
+my $branch_map_filename          = $NULL_STRING;
+my $location_map_filename        = $NULL_STRING;
 my $collcode_map_filename        = $NULL_STRING;
 
 my %branch_map;
+my %location_map;
 my %collcode_map;
 
 my $default_itemtype = 'UNKNOWN';
 my $default_branch   = 'UNKNOWN';
-my $use_hash         = 0;
+my $use_hash         = 1;
 my $drop_noitem      = 0;
 
 GetOptions(
     'in=s'             => \$input_filename,
     'item=s'           => \$item_filename,
     'out=s'            => \$output_filename,
-    'loc_branch_map=s' => \$location_branch_map_filename,
+    'xml=s'            => \$output_xml_filename,
+    'fastadd=s'        => \$output_fastadd_filename,
+    'branch_map=s'     => \$branch_map_filename,
+    'loc_map=s'        => \$location_map_filename,
     'collcode_map=s'   => \$collcode_map_filename,
     'def_itemtype=s'   => \$default_itemtype,
     'def_branch=s'     => \$default_branch,
-    'use_hash'         => \$use_hash,
     'drop_noitem'      => \$drop_noitem,
     'debug'            => \$debug,
 );
@@ -76,16 +83,26 @@ GetOptions(
 Readonly my $field_sep    => chr(254);
 Readonly my $subfield_sep => chr(253);
 
-for my $var ($input_filename,$item_filename,$output_filename,$default_itemtype,$default_branch) {
+for my $var ($input_filename,$item_filename,$output_filename,$output_xml_filename,$output_fastadd_filename,$default_itemtype,$default_branch) {
    croak ("You're missing something") if $var eq $NULL_STRING;
 }
 
-if ($location_branch_map_filename ne $NULL_STRING) {
+if ($branch_map_filename ne $NULL_STRING) {
    my $csv = Text::CSV_XS->new();
-   open my $map_file,'<',$location_branch_map_filename;
+   open my $map_file,'<',$branch_map_filename;
    while (my $line = $csv->getline($map_file)) {
       my @columns = @$line;
       $branch_map{$columns[0]} = $columns[1];
+   }
+   close $map_file;
+}
+
+if ($location_map_filename ne $NULL_STRING) {
+   my $csv = Text::CSV_XS->new();
+   open my $map_file,'<',$location_map_filename;
+   while (my $line = $csv->getline($map_file)) {
+      my @columns = @$line;
+      $location_map{$columns[0]} = $columns[1];
    }
    close $map_file;
 }
@@ -119,7 +136,7 @@ if ($use_hash) {
 my $file_handle = IO::File->new($input_filename);
 my $batch       = MARC::Batch->new('USMARC',$file_handle);
 my $iggy        = MARC::Charset::ignore_errors(1);
-my $setting     = MARC::Charset::assume_encoding('marc8');
+my $setting     = MARC::Charset::assume_encoding('utf-8');
 $batch->warnings_off();
 $batch->strict_off();
 
@@ -128,12 +145,16 @@ my %branches;
 my %locations;
 my %collcodes;
 my $no_items   = 0;
+my $xml        = 0;
 
 $i = 0;
 
 open my $output_file,'>',$output_filename;
+my $output_xml_file =  MARC::File::XML->out($output_xml_filename);
+
 RECORD:
 while () {
+   last RECORD if ($debug && $i>999);
    $i++;
    print '.'    unless ($i % 10);
    print "\r$i" unless ($i % 100);
@@ -166,10 +187,8 @@ while () {
       foreach (@{$item_hash{$biblio_key}}){
          push(@matches,$_);
       }
+      delete $item_hash{$biblio_key};
    }
-   else{
-      @matches = qx{grep "$biblio_key" $item_filename};
-   } 
 
    if (scalar(@matches) == 0) {
       $no_items++;
@@ -203,12 +222,15 @@ MATCH:
       }
   
       $item{itemcallnumber} = $columns[5];
-      $item{branch}         = $columns[6];
-      $item{location}       = $columns[7];
+      $item{branch}         = $columns[7];
+      $item{location}       = $columns[8];
 
-      if ($location_branch_map_filename ne $NULL_STRING) {
+      if (exists $branch_map{$columns[7]}) {
          $item{branch}   = $branch_map{$columns[7]};
-         $item{location} = undef;
+      }
+  
+      if (exists $location_map{$columns[8]}) {
+         $item{location} = $location_map{$columns[8]};
       }
 
       if (defined $columns[10]) {
@@ -221,6 +243,7 @@ MATCH:
 
       if (defined $columns[15]) {
          $item{collcode} = $columns[15];
+         $item{collcode} =~ s/\r//g;
          if ($collcode_map{ $item{collcode} }) {
             $item{collcode} = $collcode_map{ $item{collcode} };
          }
@@ -233,17 +256,28 @@ MATCH:
       $item{price} = $price;
       if (defined $columns[17]) {
          $item{price} = $columns[17];
+         $item{price} =~ s/\r//g;
+         if ($item{price} ne $NULL_STRING){
+            $item{price} /= 100;
+         }
       }
 
       if (defined $columns[20]){
          @subcolumns = split /$subfield_sep/, $columns[20];
          foreach my $subcolumn (@subcolumns){
-            $item{nonpublic_note} .= ' '.$subcolumn;
+            $item{nonpublic_note} .= ' | '.$subcolumn;
          }
       }
  
       if (defined $columns[21]) {
-         $item{nonpublic_note} .= ' ' .$columns[21];
+         @subcolumns = split /$subfield_sep/, $columns[21];
+         foreach my $subcolumn (@subcolumns){
+            $item{nonpublic_note} .= ' | '.$subcolumn;
+         }
+      }
+
+      if (exists $item{nonpublic_note}) {
+         $item{nonpublic_note} =~ s/^ \| //;
       }
 
       if ($item{barcode} eq $NULL_STRING 
@@ -282,12 +316,41 @@ MATCH:
       $record->insert_fields_ordered($field);
    }
 
-   print {$output_file} $record->as_usmarc();
-   $written++;
+   my $output_record;
+   eval{ $output_record = $record->as_usmarc(); } ;
+   if ($@) {
+      next RECORD;
+   }
+   if (length $output_record <= 99999) {
+      my $utf8_record = MARC::Charset::marc8_to_utf8($output_record) ;
+      $output_record =~ s/\xFD//g;
+      if ($utf8_record) {
+         print {$output_file} $utf8_record;
+         $written++;
+      }
+   }
+   else {
+      $output_xml_file->write($record);
+      $xml++;
+   }
+
 }
 close $output_file;
 
-print "\n$i records read\n$j items found.\n$problem problem items not added.\n";
+my $fastadds_found = 0;
+open my $output_fastadd_file,'>:utf8',$output_fastadd_filename;
+foreach my $kee (sort keys %item_hash){
+   foreach (@{$item_hash{$kee}}){
+      my $field= $_;
+      #$debug and print $field."\n";
+      $fastadds_found++;
+      print {$output_fastadd_file} $field."\n";
+   }
+}
+close $output_fastadd_file;
+
+print "\n$i records read\n$j items found.\n$problem problem items not added.\n$written records written to USMARC.\n$xml records written as XML.\n";
+print "$fastadds_found fast-add records written out to temporary location.\n";
 
 open my $sql_file,'>','biblio_codes.sql';
 print "\nRESULTS BY BRANCH:\n";

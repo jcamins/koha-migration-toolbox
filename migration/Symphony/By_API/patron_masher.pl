@@ -17,6 +17,8 @@ my $debug=0;
 
 my $infile_name = "";
 my $outfile_name = "";
+my $passfile_name = "";
+my $attribfile_name = "";
 my $create = 0;
 my $patron_cat_mapfile;
 my %patron_cat_map;
@@ -35,6 +37,8 @@ my $default_privacy = 0;
 GetOptions(
     'in=s'            => \$infile_name,
     'out=s'           => \$outfile_name,
+    'pass=s'          => \$passfile_name,
+    'attrib=s'        => \$attribfile_name,
     'toss-profiles=s' => \$toss_profile_string,
     'patron-cat=s'    => \$patron_cat_mapfile,
     'branch-map=s'    => \$branch_mapfile,
@@ -48,7 +52,7 @@ GetOptions(
     'debug'           => \$debug,
 );
 
-if (($infile_name eq '') || ($outfile_name eq '')){
+if (($infile_name eq '') || ($outfile_name eq '') || ($passfile_name eq '') || ($attribfile_name eq '')){
   print "Something's missing.\n";
   exit;
 }
@@ -123,7 +127,7 @@ my @borrower_fields = qw /cardnumber          surname
                           contacttitle        guarantorid
                           borrowernotes       relationship
                           ethnicity           ethnotes
-                          sex                 password
+                          sex                
                           flags               userid
                           opacnote            contactnote
                           sort1               sort2
@@ -137,8 +141,13 @@ open my $out,">:utf8",$outfile_name;
 for my $k (0..scalar(@borrower_fields)-1){
    print $out $borrower_fields[$k].',';
 }
-print $out "patron_attributes\n";
+print $out "\n";
 
+open my $attrib,">:utf8",$attribfile_name;
+print $attrib "cardnumber,patron_atttributes\n";
+
+open my $pass,">:utf8",$passfile_name;
+print $pass "cardnumber,password\n";
 
 while (my $line = readline($in)) {
    last if ($debug && $j>9);
@@ -165,11 +174,16 @@ while (my $line = readline($in)) {
             }
             print $out ",";
          }
+         print $out "\n";
+
          if ($addedcode){
             $addedcode =~ s/^,//;
-            print $out '"'."$addedcode".'"';
+            print $attrib $thisborrower{cardnumber}.',"'."$addedcode".'"'."\n";
          }
-         print $out "\n";
+
+         if (exists $thisborrower{password}) {
+            print $pass $thisborrower{cardnumber}.','.$thisborrower{password}."\n";
+         } 
       }         
       $borrowers_tossed++ if ($toss_this_borrower);
       $note = 0;

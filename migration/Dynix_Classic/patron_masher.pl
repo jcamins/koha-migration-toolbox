@@ -42,28 +42,37 @@ my $problem = 0;
 
 my $input_filename      = $NULL_STRING;
 my $output_filename     = $NULL_STRING;
+my $pass_filename       = $NULL_STRING;
+my $attrib_filename     = $NULL_STRING;
 my $barcode_filename    = $NULL_STRING;
 my $city_map_filename   = $NULL_STRING;
 my $branch_map_filename = $NULL_STRING;
+my $category_map_filename = $NULL_STRING;
 my $default_branch      = 'UNKNOWN';
 my $default_category    = 'UNKNOWN';
+my $default_privacy     = 2;
 
 my %city_map;
 my %state_map;
 my %branch_map;
+my %category_map;
 
 GetOptions(
     'in=s'               => \$input_filename,
     'out=s'              => \$output_filename,
+    'pass=s'             => \$pass_filename,
+    'attrib=s'           => \$attrib_filename,
     'barcode=s'          => \$barcode_filename,
     'city_map=s'         => \$city_map_filename,
     'branch_map=s'       => \$branch_map_filename,
+    'category_map=s'     => \$category_map_filename,
     'default_branch=s'   => \$default_branch,
     'default_category=s' => \$default_category,
+    'default_privacy=s'  => \$default_privacy,
     'debug'              => \$debug,
 );
 
-for my $var ($input_filename,$output_filename,$barcode_filename,$default_branch,$default_category) {
+for my $var ($input_filename,$output_filename,$pass_filename,$attrib_filename,$barcode_filename,$default_branch,$default_category) {
    croak ("You're missing something") if $var eq $NULL_STRING;
 }
 
@@ -104,7 +113,16 @@ if ($branch_map_filename){
    }
    close $map_file;
 }
-#$debug and warn Dumper(%branch_map);
+
+if ($category_map_filename){
+   my $csv = Text::CSV_XS->new();
+   open my $map_file,'<',$category_map_filename;
+   while (my $row = $csv->getline($map_file)){
+      my @data = @$row;
+      $category_map{$data[0]} = $data[1];
+   }
+   close $map_file;
+}
 
 my @column_names =         qw/ patronid        name     street    city      zipcode 
                                barcodes        dates    lastuse   usage     categorycode
@@ -165,7 +183,10 @@ open my $output_file,'>:utf8',$output_filename;
 for my $j (0..scalar(@borrower_fields)-1){
    print {$output_file} $borrower_fields[$j].',';
 }
-print {$output_file} "patron_attributes\n";
+print {$output_file} "\n";
+
+open my $attrib_file,'>:utf8',$attrib_filename;
+open my $pass_file,'>:utf8',$pass_filename;
 
 open my $input_file,'<',$input_filename;
 RECORD:
@@ -180,7 +201,7 @@ while (my $line = readline($input_file)){
 
    chomp $line;
    $line =~ s///g;
-   my @columns = split /$CSV_SEP/,$line;
+   my @columns = split /$FIELD_SEP/,$line;
    for my $j (0..scalar(@column_names)-1) {
       $thispatron{$column_names[$j]} = $columns[$j] || $NULL_STRING;
    }
@@ -188,6 +209,10 @@ while (my $line = readline($input_file)){
 
    if (exists $branch_map{ $thispatron{branchcode} }) {
       $thispatron{branchcode} = $branch_map{ $thispatron{branchcode} };
+   }
+
+   if (exists $category_map{ $thispatron{categorycode} }) {
+      $thispatron{categorycode} = $category_map{ $thispatron{categorycode} };
    }
 
    my $lost_barcode1 = $NULL_STRING;
@@ -275,9 +300,9 @@ while (my $line = readline($input_file)){
    ($thispatron{address},$thispatron{address2})                      = split /$SUBFIELD_SEP/,$thispatron{street};
    ($thispatron{altcontactaddress1},$thispatron{altcontactaddress2}) = split /$SUBFIELD_SEP/,$thispatron{altstreet};
 
-   $thispatron{borrowernotes} =~ s/$SUBFIELD_SEP/ -- /g;
+   $thispatron{borrowernotes} =~ s/$SUBFIELD_SEP/ | /g;
    if ($thispatron{employer}) {
-      $thispatron{borrowernotes} .= ' -- Employer: '.$thispatron{employer};
+      $thispatron{borrowernotes} .= ' | Employer: '.$thispatron{employer};
    }
 
    if ($thispatron{branchcode} eq $NULL_STRING) {
@@ -286,6 +311,9 @@ while (my $line = readline($input_file)){
    if ($thispatron{categorycode} eq $NULL_STRING) {
       $thispatron{categorycode} = $default_category;
    }
+   $thispatron{privacy} = $default_privacy;
+   $thispatron{sort1} = $thispatron{patronid};
+
    $patron_categories{$thispatron{categorycode}}++;
    $patron_branches{$thispatron{branchcode}}++;
    for my $j (0..scalar(@borrower_fields)-1){
@@ -302,11 +330,14 @@ while (my $line = readline($input_file)){
       }
       print {$output_file} ",";
    }
+   print {$output_file} "\n";
+    
+   print {$pass_file} $thispatron{cardnumber}.','.$thispatron{pin}."\n";
+
    if ($addedcode){
        $addedcode =~ s/^,//;
-       print {$output_file} '"'."$addedcode".'"';
+       print {$attrib_file} $thispatron{cardnumber}.',"'."$addedcode".'"'."\n";
    }
-   print {$output_file} "\n";
    $written++;
 }
 
