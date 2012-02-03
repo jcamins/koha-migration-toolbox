@@ -60,7 +60,8 @@ my $notfound=0;
 
 
 #my $conn = new ZOOM::Connection('nlnzcat.natlib.govt.nz:7190/Voyager');
-my $conn = new ZOOM::Connection('z3950.biblios.net:210/bibliographic');
+#my $conn = new ZOOM::Connection('z3950.biblios.net:210/bibliographic');
+my $conn = new ZOOM::Connection('lx2.loc.gov:210/LCDB');
 
 $conn->option( preferredRecordSyntax => "usmarc" );
 
