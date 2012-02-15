@@ -15,6 +15,7 @@ use Getopt::Long;
 use C4::Context;
 use C4::Biblio;
 use C4::Items;
+use C4::Reserves;
 use C4::Serials;
 use MARC::Record;
 use MARC::Field;
@@ -182,7 +183,17 @@ while (my $row=$dupe_sth->fetchrow_hashref()){
              push @errors, "The following items could not be moved from the old record to the new one: $itemlist";
          }
  
-         # Move reserves--TODO
+         # Move reserves
+         my $reserves_modified = 0;
+         my ($rescount,undef) = &GetReserves($thisone);
+         if ($rescount > 0) {
+            $sth=$dbh->prepare("UPDATE reserves SET biblionumber = ? where biblionumber =?");
+            $sth->execute($best_rec, $thisone);
+            $reserves_modified = 1;
+            print "Holds updated!\n";
+         }
+         $sth=$dbh->prepare("UPDATE old_reserves SET biblionumber = ? where biblionumber =?");
+         $sth->execute($best_rec, $thisone);
 
          # Move serials
          my $subcount = CountSubscriptionFromBiblionumber($thisone);
@@ -211,5 +222,7 @@ while (my $row=$dupe_sth->fetchrow_hashref()){
    }
 }
 print "$dupes_found duplicates found.\n";
-
+if ($reserves_modified) {
+   print "You'll need to run the holds-queue priority fixer, fix_holds_priority.pl with -a! \n";
+}
 #$dbh->do("DROP TABLE IF EXISTS temp_dedupe;");
