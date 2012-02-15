@@ -159,6 +159,12 @@ while (my $row=$dupe_sth->fetchrow_hashref()){
       print "$thisone (Len: $reclen): $field~$title~$author\n";
    }
    print "USING RECORD $best_rec\n";
+   my $reserves_modified = 0;
+   my ($rescount,undef) = &GetReserves($thisone);
+   if ($rescount > 0) {
+      $reserves_modified = 1;
+      print "Holds updated!\n";
+   }
  
    if ($doo_eet){
       foreach my $thisone (@biblios){
@@ -184,14 +190,9 @@ while (my $row=$dupe_sth->fetchrow_hashref()){
          }
  
          # Move reserves
-         my $reserves_modified = 0;
-         my ($rescount,undef) = &GetReserves($thisone);
-         if ($rescount > 0) {
-            $sth=$dbh->prepare("UPDATE reserves SET biblionumber = ? where biblionumber =?");
-            $sth->execute($best_rec, $thisone);
-            $reserves_modified = 1;
-            print "Holds updated!\n";
-         }
+         $sth=$dbh->prepare("UPDATE reserves SET biblionumber = ? where biblionumber =?");
+         $sth->execute($best_rec, $thisone);
+
          $sth=$dbh->prepare("UPDATE old_reserves SET biblionumber = ? where biblionumber =?");
          $sth->execute($best_rec, $thisone);
 
