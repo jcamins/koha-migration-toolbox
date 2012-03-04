@@ -55,6 +55,8 @@ GetOptions(
 
 my $dbh = C4::Context->dbh();
 my $sth;
+my $sth_2;
+my $sth_3;
 my $insert_sth;
 my $del_sth;
 
@@ -76,15 +78,22 @@ print "$i branches removed.\n";
 
 print "Removing unneeded item types:\n";
 $i = 0;
-$sth = $dbh->prepare("SELECT itemtype FROM itemtypes 
-                      WHERE itemtype  NOT IN (SELECT DISTINCT itype FROM items)
-                      AND itemtype NOT IN (SELECT DISTINCT itemtype FROM biblioitems)");
+$sth = $dbh->prepare("SELECT itemtype FROM itemtypes ");
+$sth_2 = $dbh->prepare("SELECT biblionumber FROM items WHERE itype =?");
+$sth_3 = $dbh->prepare("SELECT biblionumber FROM biblioitems WHERE itemtype =?");
 $del_sth = $dbh->prepare("DELETE FROM itemtypes WHERE itemtype=?");
 $sth->execute();
+ITEMTYPE:
 while (my $line=$sth->fetchrow_hashref()) {
    $i++;
    print '.'    unless ($i % 10);
    print "\r$i" unless ($i % 100);
+   $sth_2->execute($line->{itemtype});
+   my $line_2 = $sth_2->fetchrow_hashref();
+   next ITEMTYPE if $line_2->{biblionumber};
+   $sth_3->execute($line->{itemtype});
+   my $line_3 = $sth_3->fetchrow_hashref();
+   next ITEMTYPE if $line_3->{biblionumber};
    $debug and print "Removing item type $line->{itemtype}.\n";
    $doo_eet and $del_sth->execute($line->{itemtype});
 }
