@@ -73,7 +73,7 @@ while (my $thisrec=$sth->fetchrow_hashref()){
       $problem++;
    } 
 
-   my $val = "Copyright restrictions apply. Permission to publish, quote, or reproduce must be secured from the Shasta Historical Society. The reproduction of some materials may be restricted by terms of gift of purchase agreements, donor restrictions, privacy and publicity rights, licensing and trademarks. Responsibility for any use rests elusively with the user.";
+   my $val = "Copyright restrictions apply. Permission to publish, quote, or reproduce must be secured from the Shasta Historical Society. The reproduction of some materials may be restricted by terms of gift, purchase agreements, donor restrictions, privacy and publicity rights, licensing and trademarks. Responsibility for any use rests exclusively with the user.";
 
    my $field=MARC::Field->new("540"," "," ","a" => $val);
    $marcrec->insert_grouped_field($field);
