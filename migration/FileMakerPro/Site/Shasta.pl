@@ -72,6 +72,7 @@ while (my $thisrec=$sth->fetchrow_hashref()){
       print "problem with record $thisrec->{biblionumber}\n";
       $problem++;
    } 
+   next RECORD if ($marcrec->field('540');
 
    my $val = "Copyright restrictions apply. Permission to publish, quote, or reproduce must be secured from the Shasta Historical Society. The reproduction of some materials may be restricted by terms of gift, purchase agreements, donor restrictions, privacy and publicity rights, licensing and trademarks. Responsibility for any use rests exclusively with the user.";
 
