@@ -37,7 +37,10 @@ my $debug=0;
 my $doo_eet=0;
 my $i=0;
 
+my $new_only = 0;
+
 GetOptions(
+    'new_only' => \$new_only,
     'debug'    => \$debug,
     'update'   => \$doo_eet,
 );
@@ -67,22 +70,24 @@ while (my $row = $sth->fetchrow_hashref()){
   $newa =~ s/\s+$//g;
   my $newfield = MARC::Field->new('490','1',' ','a'=>$newa);
 
-  if ($record->subfield('v')){
+  if ($oldfield->subfield('v')){
      $newfield->update('v'=>$oldfield->subfield('v'));
   }
 
-  if ($record->subfield('x')){
+  if ($oldfield->subfield('x')){
      $newfield->update('x'=>$oldfield->subfield('x'));
   }
 
-  if ($record->subfield('6')){
+  if ($oldfield->subfield('6')){
      $newfield->update('6'=>$oldfield->subfield('6'));
   }
 
-  if ($record->subfield('8')){
+  if ($oldfield->subfield('8')){
      $newfield->update('8'=>$oldfield->subfield('8'));
   }
-  $record->insert_grouped_field($newfield);
+  if (($new_only && !$record->field('490')) || !$new_only) {
+     $record->insert_grouped_field($newfield);
+  }
 
   my $newfield2 = MARC::Field->new('830',' ',' ','9'=>'1');
   $newfield2->update( ind1 => $oldfield->indicator(1) );
@@ -92,7 +97,9 @@ while (my $row = $sth->fetchrow_hashref()){
      $newfield2->update( $code => $val );
   }
   $newfield2->delete_subfield( code => '9' );
-  $record->insert_grouped_field($newfield2);
+  if (($new_only && !$record->field('830')) || !$new_only) {
+     $record->insert_grouped_field($newfield2);
+  }
   $record->delete_field($oldfield);
 
   if ($debug){
