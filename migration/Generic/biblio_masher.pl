@@ -69,6 +69,7 @@ use English qw( -no_match_vars );
 use Getopt::Long;
 use Readonly;
 use Text::CSV_XS;
+use Scalar::Util qw(looks_like_number);
 use MARC::File::USMARC;
 use MARC::File::XML;
 use MARC::Record;
@@ -100,6 +101,7 @@ my $charset              = 'marc8';
 my $csv_delim            = 'comma';
 my $header_row           = $NULL_STRING;
 my $pricemap_filename    = $NULL_STRING;
+my $tally_fields         = 'a,b,8,c,y';
 my %pricemap;
 my @datamap_filenames;
 my %datamap;
@@ -133,6 +135,7 @@ GetOptions(
     'itemcol=s'    => \@itemcol,
     'itemsub=s'    => \@itemsub,
     'static=s'     => \@itemstatic,
+    'tally=s'      => \$tally_fields,
     'drop_noitems' => \$drop_noitems,
     'debug'        => \$debug,
 );
@@ -262,14 +265,10 @@ ITEM:
 #$debug and print Dumper(%itemhash);
 
 my @subfields_possible = qw/a b c d e f g h i j k l m n o p q r s t u v w x y z 0 1 2 3 4 5 6 7 8 9/;
-my %homebranchcounts;
-my %holdbranchcounts;
-my %itypecounts;
-my %locationcounts;
-my %ccodecounts;
-my %callschemecounts;
+my %tally;
 my $xml=0;
 my $dropped_itype=0;
+my $dropped_branch=0;
 
 my $input_file = IO::File->new($input_marc_filename);
 my $batch      = MARC::Batch->new('USMARC',$input_file);
@@ -278,6 +277,7 @@ $batch->strict_off();
 #my $iggy    = MARC::Charset::ignore_errors(1);
 my $setting = MARC::Charset::assume_encoding($charset);
 my $dropped_noitems = 0;
+my $items_inserted = 0;
 
 print "Processing bibliographic records:\n";
 open my $output_file,'>:utf8',$output_marc_filename;
@@ -285,7 +285,7 @@ my $output_xml_file =  MARC::File::XML->out($output_xml_filename);
 
 RECORD:
 while() {
-   last RECORD if ($debug && $i>10);
+   last RECORD if ($debug && $i>1000);
    my $record;
    my $keep_itype;
    my $keep_issues = 0;
@@ -329,6 +329,9 @@ while() {
             $default_price = $this_field->as_string($sub);
             $default_price =~ s/(\d+(\.[0-9]{2}))/$1/;
             $default_price =~ s/\$//g;
+            if (!looks_like_number($default_price)) {
+               $default_price = 0;
+            }
          }
       }
       last if ($default_price != 0);
@@ -351,12 +354,13 @@ while() {
          $match_string = $record->subfield($match_marc,$match_marc_subfield);
       }
       if ($match_string) {
-         if ($match_tool ne $NULL_STRING) {
+         if ($match_tool) {
             $match_string =~ s/($match_tool)//;
          }
          foreach (@{$itemhash{$match_string}}) {
             push (@matches,$_);
          }
+         delete $itemhash{$match_string};
       }
    }
 
@@ -373,6 +377,7 @@ MATCH:
       }
 
       foreach my $map (@item_mapping) {
+         #$debug and print "COL:$map->{'column'}\n";
          if ($match->{$map->{'column'}} ne $NULL_STRING) {
             my $sub = $map->{'subfield'};
             my $data = $match->{$map->{'column'}};
@@ -423,24 +428,23 @@ MATCH:
          next MATCH;
       }
 
-      $homebranchcounts{$field->subfield('a')}++;
-      $holdbranchcounts{$field->subfield('b')}++;
-      $itypecounts{$field->subfield('y')}++;
+      if (!$field->subfield('a')) {
+         $dropped_branch++;
+         next MATCH;
+      }
+
+      foreach my $sub (split /,/, $tally_fields){
+         if ($field->subfield($sub)) {
+            $tally{$sub}{$field->subfield($sub)}++;
+         }
+      }
       $keep_itype = $field->subfield('y');
       if ($field->subfield('l')) {
          $keep_issues += $field->subfield('l');
       }
-      if ($field->subfield('c')) {
-         $locationcounts{$field->subfield('c')}++;
-      }
-      if ($field->subfield('8')) {
-         $ccodecounts{$field->subfield('8')}++;
-      }
-      if ($field->subfield('2')) {
-         $callschemecounts{$field->subfield('2')}++;
-      }
 
       $record->insert_fields_ordered($field);
+      $items_inserted++;
       $there_are_items = 1;
    }
 
@@ -469,7 +473,7 @@ TAG:
                      }
                   }
                   if ($data ne $NULL_STRING){
-                     $field->add_subfields($sub => $data);
+                     $field->update($sub => $data);
                   }
                }
             }
@@ -508,13 +512,14 @@ TAG:
          if ($barprefix ne $NULL_STRING || $barlength > 0) {
             my $curbar = $field->subfield('p');
             my $prefixlen = length($barprefix);
-            if ($barlength > 0) {
+            if (($barlength > 0) && (length($curbar) < $barlength)) {
                my $fixlen = $barlength - $prefixlen;
                while (length ($curbar) < $fixlen) {
                   $curbar = '0'.$curbar;
                }
-            }
+            
             $curbar = $barprefix . $curbar;
+            }
             $field->update( 'p' => $curbar );
          } 
 
@@ -535,24 +540,23 @@ TAG:
             next TAG;
          }
 
-         $homebranchcounts{$field->subfield('a')}++;
-         $holdbranchcounts{$field->subfield('b')}++;
-         $itypecounts{$field->subfield('y')}++;
+         if (!field->subfield('a')) {
+            $dropped_branch++;
+            next TAG;
+         }
+
+         foreach my $sub (split /,/, $tally_fields){
+            if ($field->subfield($sub)) {
+               $tally{$sub}{$field->subfield($sub)}++;
+            }
+         }
          $keep_itype = $field->subfield('y');
          if ($field->subfield('l')) {
             $keep_issues += $field->subfield('l');
          }
-         if ($field->subfield('c')) {
-            $locationcounts{$field->subfield('c')}++;
-         }
-         if ($field->subfield('8')) {
-            $ccodecounts{$field->subfield('8')}++;
-         }
-         if ($field->subfield('2')) {
-            $callschemecounts{$field->subfield('2')}++;
-         }
 
          $record->insert_fields_ordered($field);
+         $items_inserted++;
          $there_are_items = 1;
       }
    }
@@ -604,44 +608,42 @@ print << "END_REPORT";
 $i records read.
 $written records written.
 $xml very long records written to XML file.
+$items_inserted items inserted in MARCs.
 $problem records not loaded due to problems.
+$dropped_itype items dropped for NULL item type.
+$dropped_branch items dropped for NULL branch.
 $dropped_noitems records not output because they had no items attached.
+
 END_REPORT
 
 open my $codes_file,'>',$codesfile_name;
-
-print "\nHOMEBRANCHES:\n";
-foreach my $kee (sort keys %homebranchcounts){
-   print $kee.":   ".$homebranchcounts{$kee}."\n";
+foreach my $kee (sort keys %{ $tally{a} } ){
    print {$codes_file} "REPLACE INTO branches (branchcode,branchname) VALUES ('$kee','$kee');\n";
 }
-print "\nHOLDBRANCHES:\n";
-foreach my $kee (sort keys %holdbranchcounts){
-   print $kee.":   ".$holdbranchcounts{$kee}."\n";
-   if (!$homebranchcounts{$kee}) {
+foreach my $kee (sort keys %{ $tally{b} } ){
+   if (!$tally{a}{$kee}) {
       print {$codes_file} "REPLACE INTO branches (branchcode,branchname) VALUES ('$kee','$kee');\n";
    }
 }
-print "\nITEM TYPES:\n";
-foreach my $kee (sort keys %itypecounts){
-   print $kee.":   ".$itypecounts{$kee}."\n";
+foreach my $kee (sort keys %{ $tally{y} } ){
    print {$codes_file} "REPLACE INTO itemtypes (itemtype,description) VALUES ('$kee','$kee');\n";
 }
-print "\nSHELVING LOCATIONS:\n";
-foreach my $kee (sort keys %locationcounts){
-   print $kee.":   ".$locationcounts{$kee}."\n";
+foreach my $kee (sort keys %{ $tally{c} } ){
    print {$codes_file} "REPLACE INTO authorised_values (category,authorised_value,lib) VALUES ('LOC','$kee','$kee');\n";
 }
-print "\nCOLLECTION CODES:\n";
-foreach my $kee (sort keys %ccodecounts){
-   print $kee.":   ".$ccodecounts{$kee}."\n";
+foreach my $kee (sort keys %{ $tally{8} } ){
    print {$codes_file} "REPLACE INTO authorised_values (category,authorised_value,lib) VALUES ('CCODE','$kee','$kee');\n";
 }
-print "\nCALL SCHEMA:\n";
-foreach my $kee (sort keys %callschemecounts){
-   print $kee.":   ".$callschemecounts{$kee}."\n";
+close $codes_file;
+
+print "\nTally results:\n\n";
+
+foreach my $sub (split /,/,$tally_fields) {
+   print "\nSubfield $sub:\n";
+   foreach my $kee (sort keys %{ $tally{$sub} }) {
+      print $kee.':  '.$tally{$sub}{$kee}."\n";
+   }
 }
-print "\n";
 
 exit;
 
@@ -656,7 +658,9 @@ sub _manipulate_data {
       $data =~ s/\s+$//g;
    }
    if ($tool eq 'money') {
-      $data =~ s/[^0-9\.]//g;
+#      $data =~ s/[^0-9\.]//g;
+      my $value = $data =~ m/(\d+\.\d\d)/;
+      $data = $value;
    }
    if ($tool =~ /^if:/) {
       my (undef,$conditional) = split (/:/,$tool, 2);
@@ -666,6 +670,10 @@ sub _manipulate_data {
       else {
          $data = $NULL_STRING;
       }
+   }
+   if ($tool =~ /^suffix:/) {
+      my (undef,$suffix) = split (/:/,$tool,2);
+      $data .= $suffix;
    }
    if ($tool =~ /^div:/) {
       my (undef,$val) = split (/:/,$tool,2);
@@ -695,14 +703,14 @@ sub _manipulate_data {
    }
    if ($tool eq 'date2') {
       $data =~ s/ //g;
-      if (length($data) == 8) {
-         $debug and print "BEFORE:$data\n";
+      if (length($data) >= 8) {
+         #$debug and print "BEFORE:$data\n";
          my $year  = substr($data,0,4);
          my $month = substr($data,4,2);
          my $day   = substr($data,6,2);
          if ($month && $day && $year){
             $data = sprintf "%4d-%02d-%02d",$year,$month,$day;
-         $debug and print "AFTER:$data\n";
+         #$debug and print "AFTER:$data\n";
          }
          else {
             $data= $NULL_STRING;
@@ -728,5 +736,19 @@ sub _manipulate_data {
          $data= $NULL_STRING;
       }
    }
+   if ($tool eq 'date4') {
+      $data =~ s/ //g;
+      my ($month,$day,$year) = $data =~ /(\d+).(\d+).(\d\d\d\d)/;
+      if ($month && $day && $year){
+         $data = sprintf "%4d-%02d-%02d",$year,$month,$day;
+         if ($data eq "0000-00-00") {
+            $data = $NULL_STRING;
+         }
+      }
+      else {
+         $data= $NULL_STRING;
+      }
+   }
+
    return $data;
 }
