@@ -61,7 +61,7 @@ while (my $row=$sth->fetchrow_hashref()){
    $debug and print "Biblio: $row->{biblionumber}  Item: $row->{itemnumber} \n";
 
    if ($doo_eet){
-      C4::Items::DelItemCheck($dbh,$row->{biblionumber},$row->{itemnumber});
+      C4::Items::DelItem($dbh,$row->{biblionumber},$row->{itemnumber});
    }
    $written++;
 }
