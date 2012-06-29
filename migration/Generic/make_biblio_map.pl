@@ -27,11 +27,13 @@ my $i=0;
 my $tagfield="";
 my $tagsubfield="";
 my $outfilename="";
+my $whereclause="";
 
 GetOptions(
     'tag=s'         => \$tagfield,
     'sub=s'         => \$tagsubfield,
     'out=s'         => \$outfilename,
+    'where=s'       => \$whereclause,
     'debug'         => \$debug,
 );
 
@@ -45,8 +47,12 @@ my $written=0;
 
 my $dbh=C4::Context->dbh();
 my $dum=MARC::Charset->ignore_errors(1);
-my $sth=$dbh->prepare("SELECT biblionumber FROM biblioitems");
+my $query = "SELECT biblioitems.biblionumber AS biblionumber FROM biblioitems JOIN biblio USING (biblionumber)";
+if ($whereclause ne '') {
+   $query .= " WHERE $whereclause";
+}
 my $marc_sth=$dbh->prepare("SELECT marc FROM biblioitems WHERE biblionumber=?");
+my $sth=$dbh->prepare($query);
 $sth->execute();
 
 open my $out,">",$outfilename;
