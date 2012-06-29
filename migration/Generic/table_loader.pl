@@ -8,10 +8,10 @@
 #
 #---------------------------------
 
-use strict;
-use warnings;
+use autodie;
 use Data::Dumper;
 use Getopt::Long;
+use Modern::Perl;
 use Text::CSV;
 use C4::Context;
 $|=1;
@@ -24,6 +24,10 @@ my $bibliocol = "ZZZ";
 my $alternate = undef;
 my $debug=0;
 my $doo_eet=0;
+my $barlength = 0;
+my $barprefix = '';
+my @datamap_filenames;
+my %datamap;
 
 GetOptions(
     'in=s'     => \$infile_name,
@@ -32,6 +36,9 @@ GetOptions(
     'alt=s'    => \$alternate,
     'item=s'   => \$itemcol,
     'bib=s'    => \$bibliocol,
+    'barprefix=s'  => \$barprefix,
+    'barlength=i'  => \$barlength,
+    'map=s'        => \@datamap_filenames,
     'debug'    => \$debug,
     'update'   => \$doo_eet,
 );
@@ -39,6 +46,17 @@ GetOptions(
 if (($infile_name eq '') || ($table_name eq '')){
    print "Something's missing.\n";
    exit;
+}
+
+foreach my $map (@datamap_filenames) {
+   my ($mapsub,$map_filename) = split (/:/,$map);
+   my $csv = Text::CSV_XS->new();
+   open my $mapfile,'<',$map_filename;
+   while (my $row = $csv->getline($mapfile)) {
+      my @data = @$row;
+      $datamap{$mapsub}{$data[0]} = $data[1];
+   }
+   close $mapfile;
 }
 
 my $csv=Text::CSV->new({ binary => 1 });
@@ -50,7 +68,7 @@ my $headerline = $csv->getline($io);
 my @fields=@$headerline;
 $debug and print Dumper(@fields);
 while (my $line=$csv->getline($io)){
-   $debug and last if ($j>3); 
+   $debug and last if ($j>5); 
    $j++;
    print ".";
    print "\r$j" unless ($j % 100);
@@ -59,7 +77,7 @@ while (my $line=$csv->getline($io)){
    my $querystr = "INSERT INTO $table_name (";
    my $exception = 0;
    for (my $i=0;$i<scalar(@data);$i++){
-      next if ($fields[$i] eq "");
+      next if ($fields[$i] eq "" || $data[$i] eq "");
       if ($fields[$i] eq "ignore"){
          next;
       }
@@ -82,33 +100,44 @@ while (my $line=$csv->getline($io)){
    $querystr =~ s/,$//;
    $querystr .= ") VALUES (";
    for (my $i=0;$i<scalar(@fields);$i++){
-      if ($fields[$i] eq "ignore"){
+      if ($fields[$i] eq "ignore" || $data[$i] eq ""){
          next;
       }
       if ($fields[$i] eq $borrowercol){
+         if ($barprefix ne '' || $barlength > 0) {
+            my $curbar = $data[$i];
+            my $prefixlen = length($barprefix);
+            if (($barlength > 0) && (length($curbar) <= ($barlength-$prefixlen))) {
+               my $fixlen = $barlength - $prefixlen;
+               while (length ($curbar) < $fixlen) {
+                  $curbar = '0'.$curbar;
+               }
+               $curbar = $barprefix . $curbar;
+            }
+            $data[$i] = $curbar;
+         }
+
          my $convertq = $dbh->prepare("SELECT borrowernumber FROM borrowers WHERE cardnumber = '$data[$i]';");
          $convertq->execute();
          my $rec=$convertq->fetchrow_hashref();
          my $borr=$rec->{'borrowernumber'} || $alternate;
          if ($borr){
-            $querystr .= $borr.",";
+            $data[$i]= $borr;
          }
          else {
             $exception = "No Borrower";
          }
-         next;
       } 
       if ($fields[$i] eq $bibliocol){
          my $convertq = $dbh->prepare("SELECT biblionumber FROM items WHERE barcode = '$data[$i]';");
          $convertq->execute();
          my $rec=$convertq->fetchrow_hashref();
          if ($rec->{'biblionumber'}){
-            $querystr .= $rec->{'biblionumber'}.",";
+            $data[$i] = $rec->{'biblionumber'};
          }
          else {
             $exception = "No Biblio";
          }
-         next;
       } 
       if ($fields[$i] eq $itemcol){
          if ($data[$i]){
@@ -116,12 +145,11 @@ while (my $line=$csv->getline($io)){
             $convertq->execute();
             my $rec=$convertq->fetchrow_hashref();
             if ($rec->{'itemnumber'}){
-               $querystr .= $rec->{'itemnumber'}.",";
+               $data[$i] = $rec->{'itemnumber'};
             }
             else {
                $exception = "No Item";
             }
-            next;
          }
          else{
             $querystr .= "NULL,";
@@ -133,6 +161,11 @@ while (my $line=$csv->getline($io)){
          }
       }
       if (($data[$i] ne "") && ($fields[$i] ne "suppress")){
+         my $oldval = $data[$i];
+         if ($datamap{$fields[$i]}{$oldval}) {
+            $debug and say "MAPPED: $oldval  TO $datamap{$fields[$i]}{$oldval}";
+            $data[$i] = $datamap{$fields[$i]}{$oldval};
+         }
          $data[$i] =~ s/\"/\\"/g;
          $querystr .= '"'.$data[$i].'",';
       }
