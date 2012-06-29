@@ -1,343 +1,578 @@
 #!/usr/bin/perl
 #---------------------------------
-# Copyright 2010 ByWater Solutions
+# Copyright 2012 ByWater Solutions
 #
 #---------------------------------
 #
 # -D Ruth Bavousett
 #
+# Modification log: 
+# DRB 28 Jan 2012  (Revised for new extracts, multibranch capability)
+#
 #---------------------------------
+#
+# EXPECTS:
+#   -several CSV files extracted from Voyager
+#
+# DOES:
+#   -nothing
+#
+# CREATES:
+#   -Koha patron CSV
+#
+# REPORTS:
+#   -number of records read from each input file
+#   -number of records output
 
+use autodie;
 use strict;
 use warnings;
+use Carp;
 use Data::Dumper;
-use Encode;
+use English qw( -no_match_vars );
 use Getopt::Long;
-use Text::CSV;
-$|=1;
-my $debug=0;
+use Readonly;
+use Text::CSV_XS;
+use C4::Context;
 
-my $infile_name = "";
-my $outfile_name = "";
-my $fixed_branch = "";
-my $mapfile_name = "";
-my $addressfile = "";
-my $phonefile = "";
-my $statfile = "";
-my $barcodefile = "";
-my $categoryfile = "";
-my %patron_cat_map;
-my $branch_map_name = "";
-my %branch_map;
-my $drop_code_str = "";
-my %drop_codes;
-my $use_inst_id = 0;
+local    $OUTPUT_AUTOFLUSH =  1;
+Readonly my $NULL_STRING   => q{};
+
+my $debug   = 0;
+my $doo_eet = 0;
+my $i       = 0;
+my $j       = 0;
+my $k       = 0;
+my $written = 0;
+my $problem = 0;
+
+my $input_name_filename         = $NULL_STRING;
+my $input_address_filename      = $NULL_STRING;
+my $input_barcode_filename      = $NULL_STRING;
+my $input_null_barcode_filename = $NULL_STRING;
+my $input_notes_filename        = $NULL_STRING;
+my $input_phone_filename        = $NULL_STRING;
+my $input_stats_filename        = $NULL_STRING;
+my $output_filename             = $NULL_STRING;
+my $output_password_filename    = $NULL_STRING;
+my $output_attributes_filename  = $NULL_STRING;
+my $output_codes_filename       = $NULL_STRING;
+my $fixed_branch                = 'UNKNOWN';
+my $bad_titles                  = $NULL_STRING;
+my $use_inst_id                 = 0;
+my $branch_or_category          = 'categorycode';
+my $csv_delimiter               = 'comma';
+my $tally_fields                = 'branchcode,categorycode';
+my @static;
+my @datamap_filenames;
+my %datamap;
+my @note_prefixes;
+my %note_prefix;
 
 GetOptions(
-    'in=s'          => \$infile_name,
-    'out=s'         => \$outfile_name,
-    'map=s'         => \$mapfile_name,
+    'name=s'        => \$input_name_filename,
+    'address=s'     => \$input_address_filename,
+    'barcode=s'     => \$input_barcode_filename,
+    'nullbar=s'     => \$input_null_barcode_filename,
+    'notes=s'       => \$input_notes_filename,
+    'phone=s'       => \$input_phone_filename,
+    'stats=s'       => \$input_stats_filename,
+    'out=s'         => \$output_filename,
+    'password=s'    => \$output_password_filename,
+    'attrib=s'      => \$output_attributes_filename,
+    'codes=s'       => \$output_codes_filename,
+    'bad_titles=s'  => \$bad_titles,
     'branch=s'      => \$fixed_branch,
-    'branch_map=s'  => \$branch_map_name,
-    'address=s'     => \$addressfile,
-    'phone=s'       => \$phonefile,
-    'statfile=s'    => \$statfile,
-    'category=s'    => \$categoryfile,
-    'barfile=s'     => \$barcodefile,
-    'drop_codes=s'  => \$drop_code_str,
-    'use_inst'      => \$use_inst_id,
+    'use_inst_id'   => \$use_inst_id,
+    'group=s'       => \$branch_or_category,
+    'delimiter=s'   => \$csv_delimiter,
+    'tally=s'       => \$tally_fields,
+    'static=s'      => \@static,
+    'map=s'         => \@datamap_filenames,
+    'noteprefix=s'  => \@note_prefixes,
     'debug'         => \$debug,
 );
 
-if (($infile_name eq '') || ($outfile_name eq '') || ($addressfile eq "") || ($phonefile eq "") || ($fixed_branch eq "")
-     || ($barcodefile eq q{}) || ($categoryfile eq q{}) ){
-  print "Something's missing.\n";
-  exit;
-}
-if ($drop_code_str){
-   foreach my $code (split(/,/,$drop_code_str)){
-      $drop_codes{$code} = 1;
-   }
+my %delimiter = ( 'comma' => ',',
+                  'tab'   => "\t",
+                  'pipe'  => '|',
+                );
+
+for my $var ($input_name_filename,      $input_address_filename,     $input_barcode_filename, $input_null_barcode_filename,
+             $input_notes_filename,     $input_phone_filename,       $input_stats_filename,   $output_filename,
+             $output_password_filename, $output_attributes_filename) {
+   croak ("You're missing something") if $var eq $NULL_STRING;
 }
 
-if ($mapfile_name){
-   my $csv = Text::CSV->new();
-   open my $mapfile,"<$mapfile_name";
-   while (my $row = $csv->getline($mapfile)){
+foreach my $map (@datamap_filenames) {
+   my ($mapsub,$map_filename) = split (/:/,$map);
+   my $csv = Text::CSV_XS->new();
+   open my $mapfile,'<',$map_filename;
+   while (my $row = $csv->getline($mapfile)) {
       my @data = @$row;
-      $patron_cat_map{$data[0]} = $data[1];
+      $datamap{$mapsub}{$data[0]} = $data[1];
    }
    close $mapfile;
 }
 
-if ($branch_map_name){
-   my $csv = Text::CSV->new();
-   open my $mapfile,"<$branch_map_name";
-   while (my $row = $csv->getline($mapfile)){
-      my @data = @$row;
-      $branch_map{$data[0]} = $data[1];
+my @field_static;
+foreach my $map (@static) {
+   my ($field, $data) = $map =~ /^(.*?):(.*)$/;
+   if (!$field || !$data) {
+      croak ("--static=$map is ill-formed!\n");
    }
-   close $mapfile;
+   push @field_static, {
+      'field'  => $field,
+      'data'   => $data,
+   };
 }
 
+foreach my $map (@note_prefixes) {
+   my ($field, $data) = $map =~ /^(.*?):(.*)$/;
+   if (!$field || !$data) {
+      croak ("--noteprefix=$map is ill-formed!\n");
+   }
+   $note_prefix{$field} = $data;
+}
 
-open my $infl,"<",$infile_name || die ('problem opening $infile_name');
-my $i=0;
-my $written=0;
+my %address_data_hash;
+if ($input_address_filename ne $NULL_STRING) {
+   print "Loading borrower address data into memory:\n";
+   my $csv = Text::CSV_XS->new({ binary => 1, sep_char => $delimiter{$csv_delimiter} });
+   open my $data_file,'<:utf8',$input_address_filename;
+   $csv->column_names($csv->getline($data_file));
+   while (my $line = $csv->getline_hr($data_file)) {
+      $i++;
+      print '.'    unless ($i % 10);
+      print "\r$i" unless ($i % 100);
+      push (@{$address_data_hash{$line->{PATRON_ID}}}, $line);
+   }
+   close $data_file;
+   print "\n$i lines read.\n";
+}
 
-my $csv_format = Text::CSV_XS->new();
-$csv_format->column_names( qw(PATRON_ID LASTNAME       
-                              FIRSTNAME MIDDLENAME TITLE   
-                              ISSUEDATE EXPIRATIONDATE INSTITUTION_ID ) );
+my %barcode_data_hash;
+$i=0;
+if ($input_barcode_filename ne $NULL_STRING) {
+   print "Loading borrower barcode data into memory:\n";
+   my $csv = Text::CSV_XS->new({ binary => 1, sep_char => $delimiter{$csv_delimiter} });
+   open my $data_file,'<:utf8',$input_barcode_filename;
+   $csv->column_names($csv->getline($data_file));
+   while (my $line = $csv->getline_hr($data_file)) {
+      $i++;
+      print '.'    unless ($i % 10);
+      print "\r$i" unless ($i % 100);
+      push (@{$barcode_data_hash{$line->{PATRON_ID}}}, $line);
+   }
+   close $data_file;
+   print "\n$i lines read.\n";
+}
 
-my $addr_format = Text::CSV_XS->new();
-$addr_format->column_names( qw(BARCODE ADDRESSTYPE
-                            LINE1   LINE2
-                            LINE3   LINE4
-                            LINE5   CITY
-                            STATE   ZIP
-                            COUNTRY) );
+my %null_barcode_data_hash;
+$i=0;
+if ($input_null_barcode_filename ne $NULL_STRING) {
+   print "Loading borrower null-barcode data into memory:\n";
+   my $csv = Text::CSV_XS->new({ binary => 1, sep_char => $delimiter{$csv_delimiter} });
+   open my $data_file,'<:utf8',$input_null_barcode_filename;
+   $csv->column_names($csv->getline($data_file));
+   while (my $line = $csv->getline_hr($data_file)) {
+      $i++;
+      print '.'    unless ($i % 10);
+      print "\r$i" unless ($i % 100);
+      push (@{$null_barcode_data_hash{$line->{PATRON_ID}}}, $line);
+   }
+   close $data_file;
+   print "\n$i lines read.\n";
+}
 
-my %patron_categories;
-my %patron_branches;
+my %notes_data_hash;
+if ($input_notes_filename ne $NULL_STRING) {
+   print "Loading borrower notes data into memory:\n";
+   my $csv = Text::CSV_XS->new({ binary => 1, sep_char => $delimiter{$csv_delimiter} });
+   open my $data_file,'<:utf8',$input_notes_filename;
+   $csv->column_names($csv->getline($data_file));
+LINE:
+   while (my $line = $csv->getline_hr($data_file)) {
+      $i++;
+      print '.'    unless ($i % 10);
+      print "\r$i" unless ($i % 100);
+      next LINE if ($line->{NOTE} eq $NULL_STRING || $line->{NOTE} eq ' ');
+      push (@{$notes_data_hash{$line->{PATRON_ID}}}, $line);
+   }
+   close $data_file;
+   print "\n$i lines read.\n";
+}
 
-my @borrower_fields = qw /cardnumber          surname 
-                          firstname           title 
-                          othernames          initials 
-                          streetnumber        streettype 
+my %phone_data_hash;
+$i=0;
+if ($input_phone_filename ne $NULL_STRING) {
+   print "Loading borrower phone data into memory:\n";
+   my $csv = Text::CSV_XS->new({ binary => 1, sep_char => $delimiter{$csv_delimiter} });
+   open my $data_file,'<:utf8',$input_phone_filename;
+   $csv->column_names($csv->getline($data_file));
+   while (my $line = $csv->getline_hr($data_file)) {
+      $i++;
+      print '.'    unless ($i % 10);
+      print "\r$i" unless ($i % 100);
+      push (@{$phone_data_hash{$line->{PATRON_ID}}}, $line);
+   }
+   close $data_file;
+   print "\n$i lines read.\n";
+}
+
+my %stats_data_hash;
+$i=0;
+if ($input_stats_filename ne $NULL_STRING) {
+   print "Loading borrower stats data into memory:\n";
+   my $csv = Text::CSV_XS->new({ binary => 1, sep_char => $delimiter{$csv_delimiter} });
+   open my $data_file,'<:utf8',$input_stats_filename;
+   $csv->column_names($csv->getline($data_file));
+   while (my $line = $csv->getline_hr($data_file)) {
+      $i++;
+      print '.'    unless ($i % 10);
+      print "\r$i" unless ($i % 100);
+      push (@{$stats_data_hash{$line->{PATRON_ID}}}, $line);
+   }
+   close $data_file;
+   print "\n$i lines read.\n";
+}
+
+my @borrower_fields = qw /cardnumber          surname
+                          firstname           title
+                          othernames          initials
                           address             address2
-                          city                zipcode 
-                          country             email 
-                          phone               mobile 
-                          fax                 emailpro 
-                          phonepro            B_streetnumber 
-                          B_streettype        B_address 
-                          B_address2          B_city 
-                          B_zipcode           B_country 
-                          B_email             B_phone 
-                          dateofbirth         branchcode 
-                          categorycode        dateenrolled 
-                          dateexpiry          gonenoaddress 
-                          lost                debarred 
-                          contactname         contactfirstname 
+                          city                state                zipcode  country
+                          email
+                          phone               mobile
+                          fax                 emailpro
+                          phonepro            B_streetnumber
+                          B_streettype        B_address
+                          B_address2          B_city               B_state
+                          B_zipcode           B_country
+                          B_email             B_phone
+                          dateofbirth         branchcode
+                          categorycode        dateenrolled
+                          dateexpiry          gonenoaddress
+                          lost                debarred
+                          contactname         contactfirstname
                           contacttitle        guarantorid
-                          borrowernotes       relationship 
-                          ethnicity           ethnotes 
-                          sex                 password 
-                          flags               userid 
-                          opacnote            contactnote        
-                          sort1               sort2             
-                          altcontactfirstname altcontactsurname  
-                          altcontactaddress1  altcontactaddress2 
-                          altcontactaddress3  altcontactzipcode 
+                          borrowernotes       relationship
+                          ethnicity           ethnotes
+                          sex                
+                          flags               userid
+                          opacnote            contactnote
+                          sort1               sort2
+                          altcontactfirstname altcontactsurname
+                          altcontactaddress1  altcontactaddress2
+                          altcontactaddress3  altcontactzipcode
                           altcontactcountry   altcontactphone
-                          smsalertnumber/;
+                          smsalertnumber      privacy/;
 
-open my $out,">:utf8",$outfile_name;
-for my $j (0..scalar(@borrower_fields)-1){
-   print $out $borrower_fields[$j].',';
+my %allowed_titles;
+for my $title (split /\|/, C4::Context->preference('BorrowerTitles')) {
+   my $title_match = uc $title;
+   $title_match =~ s/\.$//;
+   $allowed_titles{$title_match} = $title;
 }
-print $out "patron_attributes\n";
 
+my %tally;
 my $no_barcode=0;
+$i=0;
+
+my $csv=Text::CSV_XS->new({ binary => 1 });
+open my $input_file,'<:utf8',$input_name_filename;
+$csv->column_names($csv->getline($input_file));
+
+open my $output_file,'>:utf8',$output_filename;
+for my $k (0..scalar(@borrower_fields)-1){
+   print {$output_file} $borrower_fields[$k].',';
+}
+print {$output_file} "\n";
+
+open my $output_password_file,  '>:utf8',$output_password_filename;
+open my $output_attributes_file,'>:utf8',$output_attributes_filename;
 
 RECORD:
-while (my $row=$csv_format->getline_hr($infl)){
+while (my $row=$csv->getline_hr($input_file)){
    last RECORD if ($debug and $i>10);
    $i++;
-   print ".";
+   print '.'    unless ($i % 10);
    print "\r$i" unless ($i % 100);
-   $debug and print "\n$i: ";
-   $debug and print Dumper($row);
 
-   next RECORD if ($drop_codes{uc $row->{CATEGORY}});
-
-   my %thisrow;
+   my %this_borrower;
    my $addedcode;
 
-   $thisrow{firstname}     = $row->{FIRSTNAME};
-   $thisrow{surname}       = $row->{LASTNAME};
-   $thisrow{title}         = $row->{TITLE};
-   $thisrow{sort1}         = $row->{INSTITUTION_ID};
-   
-   $thisrow{dateenrolled} = _process_date($row->{ISSUEDATE},50);
-   $thisrow{dateexpiry}   = _process_date($row->{EXPIRATIONDATE},50);
-
-   $thisrow{firstname}   .= $row->{MIDDLENAME} ne q{}   ? ' '.$row->{MIDDLENAME}   : q{};
-
-   $thisrow{cardnumber}   = ''; 
-   if ($use_inst_id){
-      $thisrow{cardnumber}   = $row->{INSTITUTION_ID};
+   foreach my $map (@field_static) {
+      $this_borrower{$map->{'field'}} = $map->{'data'};
    }
+ 
+   $this_borrower{sort1}         = $row->{PATRON_ID};
+   $this_borrower{surname}       = $row->{LAST_NAME};
+   $this_borrower{firstname}     = $row->{FIRST_NAME};
+   $this_borrower{firstname}    .= $row->{MIDDLE_NAME} ne $NULL_STRING ? ' '.$row->{MIDDLE_NAME} : $NULL_STRING;
+
+   my $tmp_title = uc $row->{TITLE};
+   $tmp_title =~ s/\s+$//;
+   $tmp_title =~ s/\.$//;
+   if (exists $allowed_titles{$tmp_title}) {
+      $this_borrower{title}      = $allowed_titles{$tmp_title};
+   }
+   elsif ($bad_titles ne $NULL_STRING) {
+      $this_borrower{$bad_titles} = $row->{TITLE};
+   }
+  
+   if (defined $row->{REGISTRATION_DATE}) { 
+      $this_borrower{dateenrolled} = _process_date($row->{REGISTRATION_DATE}) || $NULL_STRING;
+   }
+   else {
+      $this_borrower{dateenrolled} = _process_date($row->{CREATE_DATE}) || $NULL_STRING;
+   }
+   $this_borrower{dateexpiry}   = _process_date($row->{EXPIRE_DATE})       || $NULL_STRING;
+
+
+   $this_borrower{cardnumber}   = $NULL_STRING; 
+   if ($use_inst_id){
+      $this_borrower{cardnumber}   = $row->{INSTITUTION_ID};
+   }
+   $this_borrower{sort2}        = $row->{INSTITUTION_ID};
 
    my $matchpoint = $row->{PATRON_ID};
 
+   my @address_matches;
+   foreach (@{$address_data_hash{$matchpoint}}){
+      push (@address_matches, $_);
+   }
+   my @barcode_matches;
+   foreach (@{$barcode_data_hash{$matchpoint}}){
+      push (@barcode_matches, $_);
+   }
+   my @null_barcode_matches;
+   foreach (@{$null_barcode_data_hash{$matchpoint}}){
+      push (@null_barcode_matches, $_);
+   }
+   my @notes_matches;
+   foreach (@{$notes_data_hash{$matchpoint}}){
+      push (@notes_matches, $_);
+   }
+   my @phone_matches;
+   foreach (@{$phone_data_hash{$matchpoint}}){
+      push (@phone_matches, $_);
+   }
+   my @stats_matches;
+   foreach (@{$stats_data_hash{$matchpoint}}){
+      push (@stats_matches, $_);
+   }
 
-   my @bar_matches = qx{grep "^$matchpoint," $barcodefile};
-BAR_MATCH:
-   foreach my $match (@bar_matches){
-      my $parser = Text::CSV->new();
-      $parser->parse($match);
-      my @row1=$parser->fields();
-      next BAR_MATCH if ($row1[2] != 1);
-      if (!$use_inst_id){
-         $thisrow{cardnumber}    = $row1[1];
+ADDRESS_MATCH:
+   foreach my $match (@address_matches) {
+      if ($match->{ADDRESS_TYPE} == 1){
+         if ($match->{ADDRESS_LINE3} ne $NULL_STRING 
+             || $match->{ADDRESS_LINE4} ne $NULL_STRING 
+             || $match->{ADDRESS_LINE5} ne $NULL_STRING) {
+            $this_borrower{address}  = $match->{ADDRESS_LINE1}.' '.$match->{ADDRESS_LINE2};
+            $this_borrower{address2} = $match->{ADDRESS_LINE3}.' '.$match->{ADDRESS_LINE4}.' '.$match->{ADDRESS_LINE5};
+         }
+         else {
+            $this_borrower{address}  = $match->{ADDRESS_LINE1};
+            $this_borrower{address2} = $match->{ADDRESS_LINE2};
+         }
+         $this_borrower{city}    = $match->{CITY}; 
+         $this_borrower{state}   = $match->{STATE_PROVINCE};
+         $this_borrower{zipcode} = $match->{ZIP_POSTAL};
+         $this_borrower{country} = $match->{COUNTRY};
+         next ADDRESS_MATCH;
       }
-      $thisrow{categorycode}  = uc $row1[3];
+
+      if ($match->{ADDRESS_TYPE} == 2){
+         if ($match->{ADDRESS_LINE3} ne $NULL_STRING 
+             || $match->{ADDRESS_LINE4} ne $NULL_STRING 
+             || $match->{ADDRESS_LINE5} ne $NULL_STRING) {
+            $this_borrower{B_address}  = $match->{ADDRESS_LINE1}.' '.$match->{ADDRESS_LINE2};
+            $this_borrower{B_address2} = $match->{ADDRESS_LINE3}.' '.$match->{ADDRESS_LINE4}.' '.$match->{ADDRESS_LINE5};
+         }
+         else {
+            $this_borrower{B_address}  = $match->{ADDRESS_LINE1};
+            $this_borrower{B_address2} = $match->{ADDRESS_LINE2};
+         }
+         $this_borrower{B_city}    = $match->{CITY}; 
+         $this_borrower{B_state}   = $match->{STATE_PROVINCE};
+         $this_borrower{B_zipcode} = $match->{ZIP_POSTAL};
+         $this_borrower{B_country} = $match->{COUNTRY};
+         next ADDRESS_MATCH;
+      }
+
+      if ($match->{ADDRESS_TYPE} == 3){
+         $this_borrower{email} = $match->{ADDRESS_LINE1};
+         next ADDRESS_MATCH;
+      }
+   }
+
+BARCODE_MATCH:
+   foreach my $match (@barcode_matches) {
+
+      if (!$use_inst_id){
+         $this_borrower{cardnumber} = $match->{PATRON_BARCODE};
+      }
+      if ($match->{BARCODE_STATUS} eq '') {
+         $match->{BARCODE_STATUS} = 0;
+      }
+      if ($match->{BARCODE_STATUS} != 1) {
+         $this_borrower{lost} = 1;
+      }
+      $this_borrower{$branch_or_category} = $match->{PATRON_GROUP_ID};
+   }
+
+   if (!exists $this_borrower{$branch_or_category}){
+NULL_BARCODE_MATCH:
+      foreach my $match (@null_barcode_matches) {
+         if ($match->{BARCODE_STATUS} eq '') {
+            $match->{BARCODE_STATUS} = 0;
+         }
+         next NULL_BARCODE_MATCH if ($match->{BARCODE_STATUS} != 1);
+         $this_borrower{$branch_or_category} = $match->{PATRON_GROUP_ID};
+      }
+   }
+
+   $this_borrower{borrowernotes} = $NULL_STRING;
+NOTES_MATCH:
+   foreach my $match(@notes_matches) {
+      if ($match->{NOTE_TYPE} && exists $note_prefix{$match->{NOTE_TYPE}}) {
+         $match->{NOTE} = $note_prefix{$match->{NOTE_TYPE}} . $match->{NOTE};
+      }
+      $match->{NOTE} =~ s///g;
+      $match->{NOTE} =~ s/\n/\\n/g;
+      $this_borrower{borrowernotes} .= ' | '.$match->{NOTE};
+   }
+
+PHONE_MATCH:
+   foreach my $match(@phone_matches) {
+      if ($match->{PHONE_DESC} eq 'Primary') {
+         $this_borrower{phone} = $match->{PHONE_NUMBER};
+      }
+      if ($match->{PHONE_DESC} eq 'Other') {
+         $this_borrower{phonepro} = $match->{PHONE_NUMBER};
+      }
+      if ($match->{PHONE_DESC} eq 'Fax') {
+         $this_borrower{fax} = $match->{PHONE_NUMBER};
+      }
+      if ($match->{PHONE_DESC} eq 'Mobile') {
+         $this_borrower{mobile} = $match->{PHONE_NUMBER};
+      }
+   }
+
+STAT_MATCH:
+   foreach my $match(@stats_matches) {
+      if (exists $datamap{stat}{$match->{PATRON_STAT_ID}}) {
+         foreach my $map (split /~/,$datamap{stat}{$match->{PATRON_STAT_ID}}) {
+            my ($field,$value) = split /:/,$map;
+            if ($field eq lc $field) {
+               $this_borrower{$field} = $value;
+            }
+            else {
+               $addedcode .= ','.$field.':'.$value;
+            } 
+         }
+      }
+   }
+         
+   if ($this_borrower{cardnumber} eq $NULL_STRING) {
+      $this_borrower{cardnumber} = sprintf "TEMP%d",$this_borrower{sort1};
+      $no_barcode++;
+   }
+
+   $this_borrower{userid}        = $this_borrower{cardnumber};
+   $this_borrower{password}      = substr $this_borrower{cardnumber},-4;
+
+   if (!$this_borrower{categorycode}){
+      $this_borrower{categorycode} = 'UNKNOWN';
    }
    
-   if ($thisrow{cardnumber} eq q{}){
-      $thisrow{cardnumber} = sprintf "TEMP%d",$matchpoint;
-      $no_barcode++;
-      my @category_matches = qx{grep "^$matchpoint," $categoryfile};
-      foreach my $match (@category_matches){
-         my $parser = Text::CSV->new();
-         $parser->parse($match);
-         my @row1=$parser->fields();
-         $thisrow{categorycode}  = uc $row1[3];
+   if (!$this_borrower{branchcode}){
+      $this_borrower{branchcode}    = $fixed_branch;
+   }
+
+   for my $tag (keys %this_borrower) {
+      $this_borrower{$tag} =~ s/^\s+//;
+      $this_borrower{$tag} =~ s/^\| //;
+      my $oldval = $this_borrower{$tag};
+      if ($datamap{$tag}{$oldval}) {
+         $this_borrower{$tag} = $datamap{$tag}{$oldval};
+         if ($datamap{$tag}{$oldval} eq 'NULL') {
+            delete $this_borrower{$tag};
+         }
       }
    }
 
-   $thisrow{userid}        = $thisrow{cardnumber};
-   $thisrow{password}      = substr $thisrow{cardnumber},-4;
-
-   if (!$thisrow{categorycode}){
-      $thisrow{categorycode} = "UNKNOWN";
-   }
-   if ($patron_cat_map{$thisrow{categorycode}}){
-      $thisrow{categorycode} = $patron_cat_map{$thisrow{categorycode}};
+   foreach my $sub (split /,/, $tally_fields){
+      if (exists $this_borrower{$sub}){
+         $tally{$sub}{$this_borrower{$sub}}++;
+      }
    }
 
-   my @address_matches = qx{grep "^$matchpoint,1," $addressfile};
-   foreach my $match (@address_matches){
-      $debug and print $match;
-      my $parser = Text::CSV->new({binary => 1});
-      $parser->parse($match);
-      my @row1= $parser->fields();
-      $thisrow{address} = $row1[2];
-      $thisrow{address2} = $row1[3];
-      $thisrow{city}     = $row1[7];
-      $thisrow{state}    = $row1[8];
-      $thisrow{zipcode}  = $row1[9];
-      if (length $thisrow{zipcode} == 4){
-         $thisrow{zipcode} = '0'.$row1[9];
-      }
-      $thisrow{B_address} = $row1[4];
-      $thisrow{B_address2} = $row1[5];
-      if ($row1[6] =~ /\@/){
-         $thisrow{email} = $row1[6];
-      }
-      elsif ($row1[6] ne q{}){
-         $thisrow{phonepro} = $row1[6];
-      }
-   }
-  $debug and print "foo!"; 
-   my @email_matches = qx{grep "^$matchpoint,3," $addressfile};
-   foreach my $match (@email_matches){
-      $debug and print $match;
-      my $parser = Text::CSV->new();
-      $parser->parse($match);
-      my @row1= $parser->fields();
-      $thisrow{email} = $row1[2];
-   }
-
-   my @phone_matches = qx{grep "^$matchpoint," $phonefile};
-   foreach my $match (@phone_matches){
-      $debug and print $match;
-      my $parser = Text::CSV->new();
-      $parser->parse($match);
-      my @row1=$parser->fields();
-      if ($row1[1] eq "Primary"){
-         $thisrow{phone} = $row1[2];
-      }
-      if ($row1[1] eq "Mobile"){
-         $thisrow{mobile} = $row1[2];
-      }
-      if ($row1[1] eq "Fax") {
-         $thisrow{fax} = $row1[2];
-      }
-      if ($row1[1] eq "Other") {
-         $thisrow{phonepro} = $row1[2];
-      }
-   } 
-  
-   if ($statfile ne q{}){ 
-   my @stat_matches = qx{grep "^$matchpoint," $statfile};
-   foreach my $match (@stat_matches){
-      $debug and print $match;
-      my $parser = Text::CSV->new();
-      $parser->parse($match);
-      my @row1=$parser->fields();
-      $thisrow{sex} = $row1[1];
-      $thisrow{branchcode} = $row1[2];
-      if (exists $branch_map{$row1[2]}){
-         $thisrow{branchcode} = $branch_map{$row1[2]};
-      } 
-   }
-   }
-
-   if (!$thisrow{branchcode}){
-      $thisrow{branchcode}    = $fixed_branch;
-   }
-
-   $debug and print Dumper(%thisrow);
-   $patron_categories{$thisrow{categorycode}}++;
-   $patron_branches{$thisrow{branchcode}}++;
+   $debug and print Dumper(%this_borrower);
    for my $j (0..scalar(@borrower_fields)-1){
-      if ($thisrow{$borrower_fields[$j]}){
-         $thisrow{$borrower_fields[$j]} =~ s/\"/'/g;
-         if ($thisrow{$borrower_fields[$j]} =~ /,/){
-            print $out '"'.$thisrow{$borrower_fields[$j]}.'"';
+      if ($this_borrower{$borrower_fields[$j]}){
+         $this_borrower{$borrower_fields[$j]} =~ s/\"/'/g;
+         if ($this_borrower{$borrower_fields[$j]} =~ /,/){
+            print {$output_file} '"'.$this_borrower{$borrower_fields[$j]}.'"';
          }
          else{
-            print $out $thisrow{$borrower_fields[$j]};
+            print {$output_file} $this_borrower{$borrower_fields[$j]};
          }
       }
-      print $out ",";
+      print {$output_file} ',';
    }
+   print {$output_file} "\n";
+
+   if (exists $this_borrower{password}) {
+      print {$output_password_file} "$this_borrower{cardnumber},$this_borrower{password}\n";
+   }
+   
    if ($addedcode){
-       print $out '"'."$addedcode".'"';
+      $addedcode =~ s/^,//;
+      print {$output_attributes_file} $this_borrower{cardnumber}.',"'.$addedcode.'"'."\n";
    }
-   print $out "\n";
+
    $written++;
 }
-
-close $infl;
-close $out;
+close $input_file;
+close $output_file;
+close $output_password_file;
+close $output_attributes_file;
 
 print "\n\n$i lines read.\n$written borrowers written.\n$no_barcode with no barcode.\n";
-print "\nResults by branchcode:\n";
-open my $sql,">patron_sql.sql";
-foreach my $kee (sort keys %patron_branches){
-    print $kee.":  ".$patron_branches{$kee}."\n";
-    print $sql "INSERT INTO branches (branchcode,branchname) VALUES ('$kee','$kee');\n";
+
+open my $codes_file,'>',$output_codes_filename;
+foreach my $kee (sort keys %{ $tally{branchcode} } ){
+   print {$codes_file} "INSERT INTO branches (branchcode,branchname) VALUES ('$kee','$kee');\n";
 }
-print "\nResults by categorycode:\n";
-foreach my $kee (sort keys %patron_categories){
-    print $kee.":  ".$patron_categories{$kee}."\n";
-    print $sql "INSERT INTO categories (categorycode,description) VALUES ('$kee','$kee');\n";
+foreach my $kee (sort keys %{ $tally{categorycode} } ){
+   if (!$tally{a}{$kee}) {
+      print {$codes_file} "INSERT INTO categories (categorycode,description) VALUES ('$kee','$kee');\n";
+   }
 }
-close $sql;
+close $codes_file;
+
+print "\nTally results:\n\n";
+
+foreach my $sub (split /,/,$tally_fields) {
+   print "\nSubfield $sub:\n";
+   foreach my $kee (sort keys %{ $tally{$sub} }) {
+      print $kee.':  '.$tally{$sub}{$kee}."\n";
+   }
+}
 
 exit;
 
 sub _process_date {
    my $datein = shift;
-   my $limit  = shift;
    return undef if !$datein;
-   return undef if $datein eq q{};
-   my %months =(
-                JAN => 1, FEB => 2,  MAR => 3,  APR => 4,
-                MAY => 5, JUN => 6,  JUL => 7,  AUG => 8,
-                SEP => 9, OCT => 10, NOV => 11, DEC => 12
-               );
-   my ($day,$monthstr,$year) = split /\-/, $datein;
-   if ($year < $limit){
-       $year +=2000;
+   return undef if $datein eq $NULL_STRING;
+   my ($month,$day,$year) = $datein =~ /(\d+).(\d+).(\d+)/;
+   if ($month && $day && $year) {
+      return sprintf "%4d-%02d-%02d",$year,$month,$day;
    }
-   else{
-       $year +=1900;
+   else {
+      return undef;
    }
-   return sprintf "%4d-%02d-%02d",$year,$months{uc $monthstr},$day;
 }
-

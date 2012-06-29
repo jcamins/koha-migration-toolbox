@@ -20,12 +20,10 @@ my $debug=0;
 my $doo_eet=0;
 
 my $infile_name = "";
-my $branch = "";
 my $use_inst_id = "";
 
 GetOptions(
     'in=s'            => \$infile_name,
-    'branch=s'        => \$branch,
     'use_inst'        => \$use_inst_id,
     'debug'           => \$debug,
     'update'          => \$doo_eet,
@@ -44,8 +42,9 @@ my $problem=0;
 my $dbh = C4::Context->dbh();
 my $sth = $dbh->prepare("INSERT INTO issues (borrowernumber, itemnumber, date_due, issuedate, branchcode, renewals) VALUES (?, ?, ?, ?, ?, ?)");
 my $borr_sth = $dbh->prepare("SELECT borrowernumber FROM borrowers WHERE cardnumber=?");
-my $item_sth = $dbh->prepare("SELECT itemnumber FROM items WHERE barcode=?");
+my $item_sth = $dbh->prepare("SELECT itemnumber,homebranch FROM items WHERE barcode=?");
 my $thisborrower;
+my $dum = $csv->getline($in);
 RECORD:
 while (my $line = $csv->getline($in)) {
    my @data = @$line;
@@ -69,11 +68,12 @@ while (my $line = $csv->getline($in)) {
    $item_sth->execute($thisitembar);
    $hash=$item_sth->fetchrow_hashref();
    my $thisitem = $hash->{'itemnumber'};
+   my $branch = $hash->{'homebranch'};
   
    my $thisdateout = _process_date($data[4]);
    my $thisdatedue = _process_date($data[5]);
    my $renewals = 0;
-   if ($data[4] ne q{}){
+   if ($data[6] ne q{}){
       $renewals = $data[6];
    }
 
@@ -109,19 +109,15 @@ print "\n\n$i lines read.\n$j issues loaded.\n$problem problem issues not loaded
 exit;
 
 sub _process_date {
-   my $datein=shift;
+   my $datein = shift;
+   return undef if !$datein;
    return undef if $datein eq q{};
-   my %months =(
-                  JAN => 1, FEB => 2,  MAR => 3,  APR => 4,
-                  MAY => 5, JUN => 6,  JUL => 7,  AUG => 8,
-                  SEP => 9, OCT => 10, NOV => 11, DEC => 12
-               );
-   my ($day,$monthstr,$year) = split /\-/, $datein;
-   if ($year < 40){
-       $year +=2000;
+   my ($month,$day,$year) = $datein =~ /(\d+).(\d+).(\d+)/;
+   if ($month && $day && $year) {
+      return sprintf "%4d-%02d-%02d",$year,$month,$day;
    }
-   else{
-       $year +=1900;
+   else {
+      return undef;
    }
-   return sprintf "%4d-%02d-%02d",$year,$months{$monthstr},$day;
 }
+
