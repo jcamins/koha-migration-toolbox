@@ -184,6 +184,11 @@ B<-m 'func:prefix:Extra Notes: :extranotes=append:notes'>. Note that the
 last colon is used for determining the source column, so having colons in the
 text is OK.
 
+=item text
+
+B<text> adds the specified text into the field, not pulling any data from
+the CSV.
+
 =item combine
 
 B<combine> allows multiple columns to be mixed together in different ways.  It
@@ -622,7 +627,7 @@ ROW: while (my $row = $csv->getline($csvfile)) {
     $record_count++; # we count from 1 for this
     last if ($preview && $preview < $record_count);
     my $marc_record = MARC::Record->new();
-    $marc_record->leader('00903pam  2200265 a 4500');
+    $marc_record->leader('00000pam  2200000ua 4500');
     debug(2, "Processing record $record_count");
     # Check to see if _all_ the fields we're interested in are blank
     # If so, skip record.
@@ -845,7 +850,8 @@ sub field_to_mapping {
     
     $fieldname = $field;
     if ($field =~ /^marc:/) {
-        my ($tag, $subfield) = $field =~ m/^marc:(\d*)_(.)$/;
+        my ($tag, $subfield) = $field =~ m/^marc:(00\d)_(..)$/
+            || $field =~ m/^marc:(\d*)_(.)$/;
         die "$field is not a valid MARC specifier.\n" 
             if (!defined($tag) || !defined($subfield));
         # 'newfield' specifies that we want to create new MARC fields
@@ -1289,6 +1295,14 @@ sub prefix_source {
     return $text.$value;
 }
 
+sub text_source {
+    my ($arg, $header_to_column, $row) = @_;
+
+    my ($text) = $arg =~ m/^(.*)$/;
+    die "Invalid arguments to 'prefix': $arg \n" if (!$text);
+    return $text;
+}
+
 # This is a source function that does a series of regex tests, and returns
 # a specified value when it first sees a match
 sub ifmatch_source {
@@ -1409,6 +1423,16 @@ sub add_marc_value {
     $value = [ $value ] if (!ref($value));
     return if (!@$value);
 
+    if ($tag =~ m/00\d/) {
+        if ($field = $marc_record->field($tag)) {
+            my $data = $field->data();
+            substr($data, $subfield, length $value->[0]) = $value->[0];
+            $field->update($data);
+        } else {
+            $marc_record->add_fields($tag, ' ' x $subfield . $value->[0]);
+        } 
+        return;
+    }
     foreach my $v (@$value) {
     	my $field;
         if (($field = $marc_record->field($tag)) && (!$newfield || !defined($field->subfield($subfield)))) {
@@ -1426,6 +1450,17 @@ sub add_marc_field_value {
 
     $value = [ $value ] if (!ref($value));
     return if (!@$value);
+
+    if ($tag =~ m/00\d/) {
+        if (!defined $marc_field) {
+            $marc_field = MARC::Field->new($tag, ' ' x $subfield . $value->[0]);
+        } else {
+            my $data = $marc_field->data();
+            substr($data, $subfield, length $value->[0]) = $value->[0];
+            $marc_field->update($data);
+        }
+        return $marc_field;
+    }
     if (!defined $marc_field) {
     	$marc_field = MARC::Field->new($tag, ' ', ' ',
     	    $subfield, $value->[0]);
