@@ -68,7 +68,8 @@ If you don't want a column to be checked when determining if a row is blank
 end of its mapping, e.g. B<date=marc:260_c?*>.
 
 To force a field to be repeated, rather than a subfield as is usually the
-default, append a '%'.
+default, append a '%'. To force a field to B<never> be repeated, append
+a '-'.
 
 =head3 Destination Functions
 
@@ -489,7 +490,7 @@ warn "$col     $field\n";
     my $optional = ($field =~ /\?\W*$/);
     my $required = ($field =~ /!\W*$/);
     my $ignoreforblank = ($field =~ /\*\W*$/);
-    my $repeatfield = ($field =~ /%\W*$/);
+    my $repeatfield = ($field =~ /%\W*$/) ? 1 : ($field =~ /-\W*$/) ? -1 : 0;
     $field =~ s/[!?%*]*$//;
     push @mapping, {
         'field'     => $field,
@@ -1484,8 +1485,14 @@ sub add_marc_value {
     }
     foreach my $v (@$value) {
     	my $field;
-        if (($field = $marc_record->field($tag)) && (!$newfield || !defined($field->subfield($subfield)))) {
-            $field->add_subfields($subfield => $v);
+        if ($field = $marc_record->field($tag)) {
+            my @fields = $marc_record->field($tag);
+            $field = pop @fields;
+            if (!$newfield || !defined($field->subfield($subfield))) {
+                $field->add_subfields($subfield => $v);
+            } elsif ($newfield == -1) {
+                $field->update($subfield => $v);
+            }
         } else {
             $marc_record->add_fields($tag, " ", " ", $subfield => $v);
         } 
