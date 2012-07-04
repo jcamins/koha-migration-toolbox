@@ -34,6 +34,7 @@ B<--input>=I<file>
 [B<--output>=I<file>] 
 B<--mapping>=I<column>=I<field> ...
 [B<--nostrict>] 
+[B<--skipkoha>]
 [B<--kohaconf>=I<file>] 
 [B<--kohalibs>=I<path>]
 [B<--format>=I<MARC format>]
@@ -307,6 +308,11 @@ things are, so it may be you don't need to provide this.
 This is similar to setting B<perl -I>, or the B<PERL5LIB> environment
 variable.
 
+=item B<--skipkoha>
+
+Do not use any C4 functions. With this set, the ISBN and ISSN destination
+functions will not work, nor will using Koha database names for destinations.
+
 =item B<-f>, B<--format>=I<MARC format>
 
 This is the file format that will be output. Valid options are B<usmarc>
@@ -338,6 +344,11 @@ Specifies a custom field separator character for the items file. If this is
 not supplied, it will be assumed to be the same as for the biblio file. It
 may be '\t' to indicate tab.
 
+=item B<--leader>
+
+Specifies the leader to use for the MARC records. Defaults to
+'00000pam\\2200000ua\4500'
+
 =item B<--skipnoitems>
 
 If this is set, then any biblios that have no items will not be included in
@@ -366,6 +377,11 @@ helps prevent MARC records getting too large.
 
 This specifies the MARC language mapping file to use. This file can be found
 at B<http://www.loc.gov/standards/codelists/languages.xml>.
+
+=item B<--reduce>=I<column>
+
+Use the specified column as a matching key to combine multiple rows in the CSV
+into a single MARC record.
 
 =item B<-v>, B<--debug>
 
@@ -405,12 +421,15 @@ use Encoding::FixLatin qw/ fix_latin /;
 my ($input_file, $output_file, $items_file);
 my (@mapping_cli, $date_format, $preview, $config, $help, $man, $loosequotes);
 my ($item_link, $item_split, $lang_file, $tab_sep, $field_sep, $item_field_sep);
-my ($unused_items_report, $liberty_marc, $skip_no_items);
+my ($unused_items_report, $liberty_marc, $skip_no_items, $reduce);
 my $strict = 1; # strict by default
+my %records;
 my $debug_level = 0;
 my $koha_conf = $ENV{KOHA_CONF};
 my $koha_libs;
+my $leader = '00000pam  2200000ua 4500';
 my $marc_format = 'marcxml';
+my $skip_koha;
 GetOptions(
     'input|i=s'         => \$input_file,
     'output|o=s'        => \$output_file,
@@ -429,6 +448,9 @@ GetOptions(
     'itemfieldsep=s'    => \$item_field_sep,
     'items|t=s'         => \$items_file,
     'itemlink=s'        => \$item_link,
+    'leader=s'          => \$leader,
+    'reduce=s'          => \$reduce,
+    'skipkoha'          => \$skip_koha,
     'skipnoitems'       => \$skip_no_items,
     'split|s=i'         => \$item_split,
     'unuseditemsreport=s'   => \$unused_items_report,
@@ -478,35 +500,38 @@ warn "$col     $field\n";
         'repeatfield'   => $repeatfield,
     };
 }
-pod2usage("Either the KOHA_CONF environment variable, or --kohaconf must be set.\n") if (!$koha_conf);
-$ENV{KOHA_CONF} = $koha_conf;
 
 my %language_map = load_langs($lang_file) if ($lang_file);
 
-# Try to find our libraries.
-my ($found_path, $path_not_needed);
-if ($koha_libs && -d "$koha_libs/C4") {
-    $found_path = $koha_libs;
-} elsif (-d 'C4') {
-    $found_path = '.';
-} elsif (-d '../C4') {
-    $found_path = '..';
-} elsif (-d '../../C4') {
-    $found_path = '../..';
-} elsif ($koha_conf && -d $koha_conf.'/C4') {
-    $found_path = $koha_conf;
-} else { # give up, maybe it's already in the path?
-    eval 'require C4::Biblio';
-    if ($@) {
-        pod2usage("Unable to find the C4 modules. Use the kohalibs option\n.");
-    }
-    # hey, it worked! 
-}
-push @INC, $found_path;
+unless ($skip_koha) {
+    pod2usage("Either the KOHA_CONF environment variable, or --kohaconf must be set.\n") if (!$koha_conf);
+    $ENV{KOHA_CONF} = $koha_conf;
 
-# ---- C4 INCLUDES GO HERE (and are 'requires') ---
-require C4::Biblio;
-require C4::Items;
+    # Try to find our libraries.
+    my ($found_path, $path_not_needed);
+    if ($koha_libs && -d "$koha_libs/C4") {
+        $found_path = $koha_libs;
+    } elsif (-d 'C4') {
+        $found_path = '.';
+    } elsif (-d '../C4') {
+        $found_path = '..';
+    } elsif (-d '../../C4') {
+        $found_path = '../..';
+    } elsif ($koha_conf && -d $koha_conf.'/C4') {
+        $found_path = $koha_conf;
+    } else { # give up, maybe it's already in the path?
+        eval 'require C4::Biblio';
+        if ($@) {
+            pod2usage("Unable to find the C4 modules. Use the kohalibs option\n.");
+        }
+    # hey, it worked! 
+    }
+    push @INC, $found_path;
+
+    # ---- C4 INCLUDES GO HERE (and are 'requires') ---
+    require C4::Biblio;
+    require C4::Items;
+}
 
 # This defines the functions that can be called with the mapping type 'func:'
 # The _column_re ones are to make it easy to grab a column name from a
@@ -529,6 +554,8 @@ my %source_functions = (
     'splitlast_column_re'   => qr/:([^:]*)$/,
     'prefix'    => \&prefix_source,
     'prefix_column_re'   => qr/:([^:]*)$/,
+    'text'      => \&text_source,
+    'text_column_re'    => qr//,
     'ifmatch'   => \&ifmatch_source,
     'ifmatch_column_re'   => qr/:([^:]*)$/,
     'combine'   => \&combine_source,
@@ -626,8 +653,13 @@ ROW: while (my $row = $csv->getline($csvfile)) {
     $stat_records++;
     $record_count++; # we count from 1 for this
     last if ($preview && $preview < $record_count);
-    my $marc_record = MARC::Record->new();
-    $marc_record->leader('00000pam  2200000ua 4500');
+    my $marc_record;
+    if ($reduce && $records{$row->[$header_to_column{$reduce}]}) {
+        $marc_record = $records{$row->[$header_to_column{$reduce}]};
+    } else {
+        $marc_record = MARC::Record->new();
+    }
+    $marc_record->leader($leader);
     debug(2, "Processing record $record_count");
     # Check to see if _all_ the fields we're interested in are blank
     # If so, skip record.
@@ -781,11 +813,25 @@ ROW: while (my $row = $csv->getline($csvfile)) {
         }
     }
     if (!$skip_record) {
-        $stat_bibsadded++;
-        save_record($output_fh, $marc_record);
+        if ($reduce) {
+            $stat_bibsadded++ unless $records{$row->[$header_to_column{$reduce}]};
+            $records{$row->[$header_to_column{$reduce}]} = $marc_record;
+        } else {
+            $stat_bibsadded++;
+            save_record($output_fh, $marc_record);
+        }
     }
 }
-close $output_fh;
+if ($reduce) {
+    foreach my $key (keys %records) {
+        save_record($output_fh, $records{$key});
+    }
+}
+if (ref $output_fh eq 'MARC::File::XML') {
+    $output_fh->close();
+} else {
+    close $output_fh;
+}
 
 my $status = $csv->status();
 if (defined($status)) {
@@ -850,8 +896,8 @@ sub field_to_mapping {
     
     $fieldname = $field;
     if ($field =~ /^marc:/) {
-        my ($tag, $subfield) = $field =~ m/^marc:(00\d)_(..)$/
-            || $field =~ m/^marc:(\d*)_(.)$/;
+        my ($tag, $subfield) = $field =~ m/^marc:(\d*)_(.)$/;
+        ($tag, $subfield) = $field =~ m#^marc:(00\d)/(..)$# unless (defined($tag) && defined($subfield));
         die "$field is not a valid MARC specifier.\n" 
             if (!defined($tag) || !defined($subfield));
         # 'newfield' specifies that we want to create new MARC fields
@@ -934,6 +980,7 @@ sub get_marc_field_from_koha {
     my ($field) = @_;
     my ($fieldname, $tag, $seen, $subfield);
     my @kohafieldtypes = ('', 'biblio.', 'biblioitems.', 'items.');
+    return if $skip_koha;
     foreach (@kohafieldtypes) {
         my $fieldname_tmp = $_.$field;
         my ($tag_tmp, $subfield_tmp) = 
@@ -1066,6 +1113,8 @@ sub add_leader {
 my (@isbnmarc, @issnmarc);
 sub is_isbn_issn {
     my ($required, $optional, $strict, $code) = @_;
+
+    return if $skip_koha;
 
     # Just do this the first time around
     if (!@isbnmarc) {
@@ -1299,7 +1348,7 @@ sub text_source {
     my ($arg, $header_to_column, $row) = @_;
 
     my ($text) = $arg =~ m/^(.*)$/;
-    die "Invalid arguments to 'prefix': $arg \n" if (!$text);
+    die "Invalid arguments to 'text': $arg \n" if (!$text);
     return $text;
 }
 
@@ -1424,7 +1473,7 @@ sub add_marc_value {
     return if (!@$value);
 
     if ($tag =~ m/00\d/) {
-        if ($field = $marc_record->field($tag)) {
+        if (my $field = $marc_record->field($tag)) {
             my $data = $field->data();
             substr($data, $subfield, length $value->[0]) = $value->[0];
             $field->update($data);
