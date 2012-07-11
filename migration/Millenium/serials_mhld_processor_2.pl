@@ -132,7 +132,8 @@ FIELD035:
    $biblio->insert_fields_ordered($record->field('867'));
    $biblio->insert_fields_ordered($record->field('868'));
 
-#   my $field852 = $record->field('852');
+   my $field852 = $record->field('852');
+   my $location = $field852->subfield('b') || $NULL_STRING;
    my $holdings = $NULL_STRING,
 #   my $holdings = sprintf "%s - %s - %s:\n",$field852->subfield('a') || $NULL_STRING,
 #                                            $field852->subfield('h') || $NULL_STRING,
@@ -237,7 +238,7 @@ TAG866:
 
    chomp $holdings;
    chomp $keep_holdings;
-   my $new_field=MARC::Field->new('866',' ',' ','a' => $keep_holdings);
+   my $new_field=MARC::Field->new('866',' ',' ','a' => $keep_holdings, 'b' => $location);
    $biblio->insert_fields_ordered($new_field);
 
    $debug and say "HOLDINGS: $holdings";
