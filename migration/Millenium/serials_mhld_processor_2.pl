@@ -41,10 +41,13 @@ my $problem = 0;
 my $input_filename = $NULL_STRING;
 my $biblio_map_filename = $NULL_STRING;
 my %biblio_map;
+my $location_map_filename = $NULL_STRING;
+my %location_map;
 
 GetOptions(
     'in=s'     => \$input_filename,
     'biblio_map=s' => \$biblio_map_filename,
+    'location_map=s' => \$location_map_filename,
     'debug'    => \$debug,
     'update'   => \$doo_eet,
 
@@ -52,6 +55,17 @@ GetOptions(
 
 for my $var ($input_filename, $biblio_map_filename) {
    croak ("You're missing something") if $var eq $NULL_STRING;
+}
+
+if ($location_map_filename ne $NULL_STRING) {
+   print "Reading in location map file.\n";
+   my $csv = Text::CSV_XS->new();
+   open my $mapfile,'<',$location_map_filename;
+   while (my $line = $csv->getline($mapfile)) {
+      my @data = @$line;
+      $location_map{$data[0]} = $data[1];
+   }
+   close $mapfile;
 }
 
 print "Reading in biblio map file.\n";
@@ -66,6 +80,7 @@ if ($biblio_map_filename ne $NULL_STRING) {
 }
 
 my %touched = ();
+my %locations_used = ();
 my $stop_point = 0;
 my $input_file = IO::File->new($input_filename);
 my $batch      = MARC::Batch->new('USMARC',$input_file);
@@ -134,6 +149,13 @@ FIELD035:
 
    my $field852 = $record->field('852');
    my $location = $field852->subfield('b') || $NULL_STRING;
+   if (defined $location_map{$location} ) {
+      $location = $location_map{$location};
+   }
+   if ($location eq $NULL_STRING ) {
+      say "Biblio $biblio_map{$bib_id} has a blank location in an 866.";
+   }
+   $locations_used{$location}++;
    my $holdings = $NULL_STRING,
 #   my $holdings = sprintf "%s - %s - %s:\n",$field852->subfield('a') || $NULL_STRING,
 #                                            $field852->subfield('h') || $NULL_STRING,
@@ -257,6 +279,11 @@ $i records read.
 $written records written.
 $problem records not loaded due to problems.
 END_REPORT
+
+say "Locations used:";
+foreach my $kee (sort keys %locations_used) {
+    say "$kee:  $locations_used{$kee}";
+}
 
 my $end_time = time();
 my $time     = $end_time - $start_time;
