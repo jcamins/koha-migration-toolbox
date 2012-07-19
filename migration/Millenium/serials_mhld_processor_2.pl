@@ -87,6 +87,9 @@ my $batch      = MARC::Batch->new('USMARC',$input_file);
 $batch->warnings_off();
 $batch->strict_off();
 
+my $dbh = C4::Context->dbh();
+my $locations_count_sth = $dbh->prepare("SELECT DISTINCT location FROM items WHERE biblionumber = ?");
+
 RECORD:
 while() {
    last RECORD if ($debug && $stop_point);
@@ -152,9 +155,24 @@ FIELD035:
    if (defined $location_map{$location} ) {
       $location = $location_map{$location};
    }
+   my $fld245 = $biblio->field('245');
+   my $title = $fld245->as_string();
    if ($location eq $NULL_STRING ) {
-      say "Biblio $biblio_map{$bib_id} has a blank location in an 866.";
+      $locations_count_sth->execute($biblio_map{$bib_id});
+      my $locations = $locations_count_sth->fetchall_arrayref;
+      if (scalar @{$locations} eq 1) {
+         my @locs = @$locations;
+         my $location_to_use = lc @{$locs[0]}->[0];
+         $location = $location_to_use;
+      }
+      else{
+         say "866b BLANK: Biblio $biblio_map{$bib_id}: $title";
+      }
    }
+   if (($location eq 'main') || ($location eq 'refsc')) {                 #VMI
+      say "866b $location: Biblio $biblio_map{$bib_id}: $title";
+   }
+
    $locations_used{$location}++;
    my $holdings = $NULL_STRING,
 #   my $holdings = sprintf "%s - %s - %s:\n",$field852->subfield('a') || $NULL_STRING,
