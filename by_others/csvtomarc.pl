@@ -363,6 +363,11 @@ The file will have a large number of columns (up to 999) that are formed like
 hopefully decodable, format. This will decode them and put them in the output.
 Any field that is explicitly defined will not be included in this process.
 
+=item B<--dedupfields>
+
+Don't allow any fields with the exact same contents. Usually only required when
+using B<--reduce> on a non-sparse file.
+
 =item B<--unuseditemsreport>
 
 This produces a file that lists the IDs of all the items that do not get
@@ -431,12 +436,13 @@ my $koha_libs;
 my $leader = '00000pam  2200000ua 4500';
 my $marc_format = 'marcxml';
 my $skip_koha;
+my $dedup_fields;
 GetOptions(
     'input|i=s'         => \$input_file,
     'output|o=s'        => \$output_file,
     'mapping|m=s'       => \@mapping_cli,
     'dateformat|d=s'    => \$date_format,
-    'strict'            => \$strict,
+    'strict!'            => \$strict,
     'preview|p=i'       => \$preview,
     'configfile|c'      => \$config,
     'kohaconf=s'        => \$koha_conf,
@@ -456,6 +462,7 @@ GetOptions(
     'split|s=i'         => \$item_split,
     'unuseditemsreport=s'   => \$unused_items_report,
     'libertymarc'       => \$liberty_marc,
+    'dedupfields'       => \$dedup_fields,
     'lang=s'            => \$lang_file,
     'help|h'            => \$help,
     'man'               => \$man,
@@ -819,12 +826,14 @@ ROW: while (my $row = $csv->getline($csvfile)) {
             $records{$row->[$header_to_column{$reduce}]} = $marc_record;
         } else {
             $stat_bibsadded++;
+            dedup_fields($marc_record) if ($dedup_fields);
             save_record($output_fh, $marc_record);
         }
     }
 }
 if ($reduce) {
     foreach my $key (keys %records) {
+        dedup_fields($records{$key}) if ($dedup_fields);
         save_record($output_fh, $records{$key});
     }
 }
@@ -840,6 +849,34 @@ if (defined($status)) {
     print STDERR "Error input: ".$csv->error_input."\n";
     print STDERR "Continuing saving what we did get.\n";
     $csv->SetDiag(0);
+}
+
+sub dedup_fields {
+    my $marc_record = shift;
+    my %tags;
+    foreach my $field ($marc_record->fields()) {
+        $tags{$field->tag()}++;
+    }
+    $Data::Dumper::Sortkeys = 1;
+    foreach my $tag (keys %tags) {
+        if ($tags{$tag} > 1) {
+            my @fields = $marc_record->field($tag);
+            next unless (scalar(@fields) > 1);
+            foreach my $field1 (@fields) {
+                my @fieldscmp = $marc_record->field($tag);
+                my $duplicate;
+                foreach my $field2 (@fieldscmp) {
+                    next if ($field1 == $field2);
+                    if (Data::Dumper::Dumper($field1) eq Data::Dumper::Dumper($field2)) {
+                        $duplicate = 1;
+                        last;
+                    }
+                }
+                $marc_record->delete_fields($field1) if $duplicate;
+            }
+        }
+    }
+    return $marc_record;
 }
 
 sub open_output_file {
@@ -1492,6 +1529,8 @@ sub add_marc_value {
                 $field->add_subfields($subfield => $v);
             } elsif ($newfield == -1) {
                 $field->update($subfield => $v);
+            } else {
+                $marc_record->add_fields($tag, " ", " ", $subfield => $v);
             }
         } else {
             $marc_record->add_fields($tag, " ", " ", $subfield => $v);
@@ -1661,8 +1700,8 @@ sub value_from_row {
             if ($strict && !$map->{optional} && $value eq '');
         debug(1,"There is an empty value in record $record_count, field $col (strict is off, ignoring")
             if (!$strict && !$map->{optional} && $value eq '');
-        die "There is an empty value in record $record_count, field $col (this is compulsory)\n@$row\n"
-            if ($map->{required} && $value eq '');
+        #die "There is an empty value in record $record_count, field $col (this is compulsory)\n@$row\n"
+        #    if ($map->{required} && $value eq '');
         # If we get here and the value is empty, it's OK and we skip this
         # field.
         return if $value eq '';
