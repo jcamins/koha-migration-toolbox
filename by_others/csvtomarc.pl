@@ -218,6 +218,11 @@ example: B<-m item:barcode=barcode> says that the 'barcode' column from the
 items table should be used to populate the item record. See
 B<--items> and B<--itemlink> for information that goes with this.
 
+=item titlecase
+
+B<titlecase> converts the text in the specified to title case (i.e. the first
+letter of every word capitalized).
+
 =back
 
 To use a function, use a mapping such as B<-m func:today=dateaccessioned>.
@@ -567,6 +572,8 @@ my %source_functions = (
     'ifmatch'   => \&ifmatch_source,
     'ifmatch_column_re'   => qr/:([^:]*)$/,
     'combine'   => \&combine_source,
+    'titlecase' => \&titlecase_source,
+    'titlecase_column_re' => qr/^(.*)$/,
 );
 
 # Convert the Koha mappings into MARC fields
@@ -1388,6 +1395,19 @@ sub text_source {
     my ($text) = $arg =~ m/^(.*)$/;
     die "Invalid arguments to 'text': $arg \n" if (!$text);
     return $text;
+}
+
+sub titlecase_source {
+    my ($arg, $header_to_column, $row) = @_;
+
+    my ($source) = $arg =~ m/^(.*)$/;
+    my $idx = $header_to_column->{$source};
+    die "Unknown column '$source' specified in titlecase source: '$arg'\n" if !defined($idx);
+    my $value = $row->[$header_to_column->{$source}];
+    return undef if (!$value);
+    $value =~ tr/[A-Z]/[a-z]/;
+    $value =~ s/(\b)([a-z])/\1\u\2/g;
+    return $value;
 }
 
 # This is a source function that does a series of regex tests, and returns
