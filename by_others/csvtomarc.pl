@@ -432,7 +432,7 @@ use Encoding::FixLatin qw/ fix_latin /;
 my ($input_file, $output_file, $items_file);
 my (@mapping_cli, $date_format, $preview, $config, $help, $man, $loosequotes);
 my ($item_link, $item_split, $lang_file, $tab_sep, $field_sep, $item_field_sep);
-my ($unused_items_report, $liberty_marc, $skip_no_items, $reduce);
+my ($unused_items_report, $liberty_marc, $skip_no_items, $reduce, @reductions);
 my $strict = 1; # strict by default
 my %records;
 my $debug_level = 0;
@@ -515,6 +515,9 @@ warn "$col     $field\n";
 }
 
 my %language_map = load_langs($lang_file) if ($lang_file);
+
+@reductions = split(/,/, $reduce);
+chomp @reductions;
 
 unless ($skip_koha) {
     pod2usage("Either the KOHA_CONF environment variable, or --kohaconf must be set.\n") if (!$koha_conf);
@@ -669,8 +672,16 @@ ROW: while (my $row = $csv->getline($csvfile)) {
     $record_count++; # we count from 1 for this
     last if ($preview && $preview < $record_count);
     my $marc_record;
-    if ($reduce && $records{$row->[$header_to_column{$reduce}]}) {
-        $marc_record = $records{$row->[$header_to_column{$reduce}]};
+    my $reducekey = '';
+    if (@reductions) {
+        foreach my $reduction (@reductions) {
+            if ($row->[$header_to_column{$reduction}]) {
+                $reducekey .= '-' . $row->[$header_to_column{$reduction}];
+            }
+        }
+    }
+    if ($reducekey && $records{$reducekey}) {
+        $marc_record = $records{$reducekey};
     } else {
         $marc_record = MARC::Record->new();
     }
