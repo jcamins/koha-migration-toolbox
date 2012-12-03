@@ -2,6 +2,7 @@
 
  Koha Migration Toolbox
  Copyright 2010 ByWater Solutions
+ Parts Copyright 2012 C & P Bibliography Services
 
 ---------------------------------
 
@@ -22,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 1) Introduction
 
-    These scripts were written by or for ByWater Solutions, for use in 
+    Most of these scripts were written by or for ByWater Solutions, for use in 
     migration and support of the Koha integrated library system.  We
     give them to the community, in the hope that others find them 
     useful.  Most should be fairly self-explanatory; if you have specific
@@ -30,6 +31,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     
     D Ruth Bavousett <ruth@bywatersolutions.com>
     Brendan Gallagher <brendan@bywatersolutions.com>
+
+    Some of these scripts were written by or for C & P Bibliography
+    Services.
 
 2) Generalities
 
