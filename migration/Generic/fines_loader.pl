@@ -4,10 +4,6 @@
 #
 #---------------------------------
 #
-# This script is intended to ingest a MARC-formatted patron file from 
-# VTLS Virtua, and write an output file in a form that can be 
-# fed to ByWater's General Purpose Database Table Loader script.
-#
 # -D Ruth Bavousett
 #
 #---------------------------------
@@ -23,13 +19,19 @@ $|=1;
 my $infile_name = "";
 my $borrowercol = "";
 my $itemcol = "";
+my $borrbarlength = 0;
+my $borrbarprefix = "";
 my $debug= 0;
 my $doo_eet=0;
+my $divide_it=0;
 
 GetOptions(
     'in=s'     => \$infile_name,
     'borr=s'   => \$borrowercol,
     'item=s'   => \$itemcol,
+    'b_barlength=i' => \$borrbarlength,
+    'b_barprefix=s' => \$borrbarprefix,
+    'divide'    => \$divide_it,
     'debug'    => \$debug,
     'update'   => \$doo_eet,
 );
@@ -78,7 +80,26 @@ while (my $line=$csv->getline($io)){
       if ($fields[$i] eq "ignore"){
          next;
       }
+      if ($fields[$i] =~ /^amount/ && $divide_it) {
+         $data[$i] = $data[$i]/100;
+      }
       if ($fields[$i] eq $borrowercol){
+         if ($borrbarprefix ne '' || $borrbarlength > 0) {
+            my $curbar = $data[$i];
+       $debug and print $curbar."\n";
+            my $prefixlen = length($borrbarprefix);
+            if (($borrbarlength > 0) && (length($curbar) <= ($borrbarlength-$prefixlen))) {
+               my $fixlen = $borrbarlength - $prefixlen;
+               while (length ($curbar) < $fixlen) {
+$debug and print "zero!";
+                  $curbar = '0'.$curbar;
+               }
+               $curbar = $borrbarprefix . $curbar;
+            }
+       $debug and print $curbar."\n";
+            $data[$i] = $curbar;
+         }
+
          my $convertq = $dbh->prepare("SELECT borrowernumber FROM borrowers WHERE cardnumber = '$data[$i]';");
          $convertq->execute();
          my $rec=$convertq->fetchrow_hashref();
@@ -114,7 +135,7 @@ while (my $line=$csv->getline($io)){
    }
    $querystr .= "$nextaccntno);";
 
-   $debug and warn $querystr;
+   #$debug and warn $querystr;
    if (!$exception){
       my $sth = $dbh->prepare($querystr);
       $sth->execute() if ($doo_eet);

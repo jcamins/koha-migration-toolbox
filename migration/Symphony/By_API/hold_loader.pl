@@ -11,20 +11,34 @@
 use strict;
 use Data::Dumper;
 use Getopt::Long;
+use Text::CSV_XS;
 use C4::Context;
 $|=1;
 my $debug=0;
 
 my $infile_name = "";
+my $branchmap_filename = "";
+my %branchmap;
 
 GetOptions(
     'in=s'            => \$infile_name,
+    'branch-map=s'    => \$branchmap_filename,
     'debug'           => \$debug,
 );
 
 if (($infile_name eq '')){
   print "Something's missing.\n";
   exit;
+}
+
+if ($branchmap_filename ne '') {
+   my $csv = Text::CSV_XS->new();
+   open my $mapfile,'<',$branchmap_filename;
+   while (my $line = $csv->getline($mapfile)) {
+      my @data = @$line;
+      $branchmap{$data[0]} = $data[1];
+   }
+   close $mapfile;
 }
 
 open my $in,"<$infile_name";
@@ -50,6 +64,9 @@ while (my $line = readline($in)) {
          $debug and print Dumper(%thishold);
          if ($thishold{'borrowernumber'} && $thishold{'biblionumber'}){
             $j++;
+            if (exists $branchmap{$thishold{'branchcode'}}) {
+               $thishold{'branchcode'} = $branchmap{$thishold{branchcode}};
+            }
             $sth->execute($thishold{'borrowernumber'},
                           $thishold{'biblionumber'},
                           $thishold{'branchcode'},
@@ -96,6 +113,9 @@ close $in;
          $debug and print Dumper(%thishold);
          if ($thishold{'borrowernumber'} && $thishold{'biblionumber'}){
             $j++;
+            if (exists $branchmap{$thishold{'branchcode'}}) {
+               $thishold{'branchcode'} = $branchmap{$thishold{branchcode}};
+            }
             $sth->execute($thishold{'borrowernumber'},
                           $thishold{'biblionumber'},
                           $thishold{'branchcode'},

@@ -1,0 +1,23 @@
+a:  35884  #call number             o
+c:  35884  #copy num                 t
+d:  29025  #seendate                 r
+e:  28784  #last borrowed              s
+f:  5502   #last inventoried     (toss)
+g:  5502   #inventory count (toss)
+i:  35884  #barcode                  p
+j:  1      #pieces              3
+k:  6450   #curr loc
+l:  35884  #shelfloc               c
+m:  35884  #branchcode           a b
+n:  26992  #issues                 l
+o:  15     #private note            x
+p:  25862  #price            v g
+q:  16839  #in house charges (drop?  add to L?)
+r:  35884  #circ flag            7
+s:  35884  #perm flag     (toss)
+t:  35883  #itype             y
+u:  35884  #acq date          d
+w:  35884  #call scheme    2
+x:  29867  #cat1       8
+z:  29841  #cat2       8+
+

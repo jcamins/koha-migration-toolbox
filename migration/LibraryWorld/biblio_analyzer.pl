@@ -53,7 +53,7 @@ my %collname_counts;
 
 RECORD:
 while () {
-   last if ($debug and $i > 99);
+   last if ($debug and $i > 35000);
    my $record = $batch->next();
    $i++;
    print ".";
@@ -69,6 +69,7 @@ while () {
        next RECORD;
    }
    my $itype = substr($record->leader(),6 ,2);
+$itype_counts{$itype}++;
   
 ITMRECORD: 
    foreach my $field ($record->field("852")){
@@ -81,11 +82,12 @@ ITMRECORD:
          $bad_852_noholdcode++;
          next ITMRECORD;
       }
+print "$field->subfield('j')\n";
       $branch_counts{$field->subfield('b')}++;
       $loc_counts{$field->subfield('k')}++;
       $status_counts{$field->subfield('a')}++ if ($field->subfield('a'));
       $collname_counts{$field->subfield('j')}++;
-      $itype_counts{$itype}++;
+#      $itype_counts{$itype}++;
    }
 }
  

@@ -34,6 +34,7 @@ my $default_branch = "";
 my $default_itype = "";
 my $drop_noitem = 0;
 my $barcode_prefix = "";
+my @dropfields;
 
 
 GetOptions(
@@ -47,6 +48,7 @@ GetOptions(
     'default_itype=s'   => \$default_itype,
     'drop_noitem'   => \$drop_noitem,
     'bar_prefix=s'    => \$barcode_prefix,
+    'dropfield=s'       => \@dropfields,
     'debug'         => \$debug,
 );
 
@@ -122,6 +124,12 @@ while () {
    print ".";
    print "\r$i" unless $i % 100;
 
+   foreach my $dropfield (@dropfields) {
+      foreach my $drop_specific_field ($record->field($dropfield)) {
+         $record->delete_field($drop_specific_field);
+      }
+   }
+
    my %homebranch;
    my %holdbranch;
    my %itype;
@@ -141,6 +149,7 @@ while () {
    my %copynum;
    my %loststat;
    my %damstat;
+   my %scheme;
    my %notforloanstat;
 
 ITMFIELD:
@@ -150,6 +159,7 @@ ITMFIELD:
       my $barcode = $field->subfield('p') || $barcode_prefix.sprintf "%06d",$j;
       $itype{$barcode} = $field->subfield('y') || $default_itype;
       $loc{$barcode} = $field->subfield('c') || "";
+      $scheme{$barcode} = $field->subfield('2') || 'lcc';
       $itemcall{$barcode} = $field->subfield('o') || "";
       $collcode{$barcode} = $field->subfield('8') || "";
       $collcode{$barcode} =~ s/[\n\t\"\']//g;
@@ -200,7 +210,7 @@ ITMFIELD:
         "y" => $itype{$key},
         "g" => $itmprice{$key},
         "v" => $replprice{$key},
-        "2" => "lcc",
+        "2" => $scheme{$key},
       );
       $itmtag->update( "c" => $loc{$key} )       if ($loc{$key});
       $itmtag->update( "8" => $collcode{$key} )  if ($collcode{$key});

@@ -411,7 +411,7 @@ GetOptions(
     'output|o=s'        => \$output_file,
     'mapping|m=s'       => \@mapping_cli,
     'dateformat|d=s'    => \$date_format,
-    'strict'            => \$strict,
+    'strict!'           => \$strict,
     'preview|p=i'       => \$preview,
     'configfile|c'      => \$config,
     'kohaconf=s'        => \$koha_conf,
@@ -1411,7 +1411,8 @@ sub add_marc_value {
 
     foreach my $v (@$value) {
     	my $field;
-        if (($field = $marc_record->field($tag)) && (!$newfield || !defined($field->subfield($subfield)))) {
+        my @fields_tmp = $marc_record->field($tag);
+        if (($field = $fields_tmp[(scalar @fields_tmp)-1]) && (!$newfield || !defined($field->subfield($subfield)))) {
             $field->add_subfields($subfield => $v);
         } else {
             $marc_record->add_fields($tag, " ", " ", $subfield => $v);

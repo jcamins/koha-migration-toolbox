@@ -47,10 +47,16 @@ my $problem = 0;
 my $input_filename  = $NULL_STRING;
 my $record_type     = $NULL_STRING;
 my $output_filename = $NULL_STRING;
+my $input_encoding  = 'utf8';
+my $field_to_create = $NULL_STRING;
+my $subfield_to_create        = $NULL_STRING;
 
 GetOptions(
     'in=s'     => \$input_filename,
     'type=s'   => \$record_type,
+    'field=s'  => \$field_to_create,
+    'subfield=s' => \$subfield_to_create,
+    'encoding=s' => \$input_encoding,
     'out=s'    => \$output_filename,
     'debug'    => \$debug,
 );
@@ -65,8 +71,9 @@ my %record_types=(
                      'subject'  => '150',
                  );
 
-open my $input_file, '<',$input_filename;
-open my $output_file,'>',$output_filename;
+
+open my $input_file, "<:encoding($input_encoding)",$input_filename;
+open my $output_file,'>:utf8',$output_filename;
 
 LINE:
 while (my $line=readline($input_file)){
@@ -85,7 +92,10 @@ while (my $line=readline($input_file)){
    my $new_record = MARC::Record->new();
    $new_record->leader('     nz a22     o  4500');
 
-   my $new_field = MARC::Field->new( $record_types{$record_type} ,' ',' ', 'a' => $line );
+   my $field_to_use    = $field_to_create ne $NULL_STRING    ? $field_to_create    : $record_types{$record_type};
+   my $subfield_to_use = $subfield_to_create ne $NULL_STRING ? $subfield_to_create : 'a';
+
+   my $new_field = MARC::Field->new( $field_to_use ,' ',' ', $subfield_to_use => $line );
    $new_record->insert_grouped_field($new_field);
 
    my $new_008 = MARC::Field->new( '008','      |a ||z||||||          || ||    |u');

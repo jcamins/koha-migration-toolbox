@@ -176,6 +176,7 @@ while (my $line = readline($in)) {
    }
 
    if ($thistag eq "SERC_ID"){
+      $content =~ s/SC\-//;
       $this_subscription{subscriptionid} = $content;
       $id = $content;
       next;

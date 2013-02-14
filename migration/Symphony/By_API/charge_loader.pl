@@ -12,24 +12,38 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use C4::Context;
+use Text::CSV_XS;
 $|=1;
 my $debug=0;
 my $doo_eet=0;
 
 my $infile_name = "";
 my $duple_name = "";
+my @datamap_filenames;
+my %datamap;
 
 GetOptions(
     'in=s'            => \$infile_name,
     'dup=s'           => \$duple_name,
+    'map=s'           => \@datamap_filenames,
     'debug'           => \$debug,
     'update'          => \$doo_eet,    
-
 );
 
 if (($infile_name eq '') || ($duple_name eq '')){
   print "Something's missing.\n";
   exit;
+}
+
+foreach my $map (@datamap_filenames) {
+   my ($mapsub,$map_filename) = split (/:/,$map);
+   my $csv = Text::CSV_XS->new();
+   open my $mapfile,'<',$map_filename;
+   while (my $row = $csv->getline($mapfile)) {
+      my @data = @$row;
+      $datamap{$mapsub}{$data[0]} = $data[1];
+   }
+   close $mapfile;
 }
 
 open my $in,"<$infile_name";
@@ -57,6 +71,16 @@ while (my $line = readline($in)) {
          $debug and print Dumper(%thisissue);
          if ($thisissue{'borrowernumber'} && $thisissue{'itemnumber'}){
             $j++;
+            for my $tag (keys %thisissue) {
+               my $oldval = $thisissue{$tag};
+               if ($datamap{$tag}{$oldval}) {
+                  $thisissue{$tag} = $datamap{$tag}{$oldval};
+                  if ($datamap{$tag}{$oldval} eq 'NULL') {
+                     delete $thisissue{$tag};
+                  }
+               }
+            }
+
             $issue_sth->execute($thisissue{'itemnumber'});
             my $issue = $issue_sth->fetchrow_hashref();
             if ($issue) {
@@ -111,6 +135,15 @@ if (%thisissue){
    $debug and print Dumper(%thisissue);
    if ($thisissue{'borrowernumber'} && $thisissue{'itemnumber'}){
       $j++;
+      for my $tag (keys %thisissue) {
+         my $oldval = $thisissue{$tag};
+         if ($datamap{$tag}{$oldval}) {
+            $thisissue{$tag} = $datamap{$tag}{$oldval};
+            if ($datamap{$tag}{$oldval} eq 'NULL') {
+               delete $thisissue{$tag};
+            }
+         }
+      }
       $sth->execute($thisissue{'borrowernumber'},
                     $thisissue{'itemnumber'},
                     $thisissue{'duedate'},

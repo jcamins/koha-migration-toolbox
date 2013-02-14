@@ -22,6 +22,7 @@ my $borrowercol = "XXX";
 my $itemcol = "YYY";
 my $bibliocol = "ZZZ";
 my $alternate = undef;
+my $csv_delim = 'comma';
 my $debug=0;
 my $doo_eet=0;
 my $barlength = 0;
@@ -39,9 +40,15 @@ GetOptions(
     'barprefix=s'  => \$barprefix,
     'barlength=i'  => \$barlength,
     'map=s'        => \@datamap_filenames,
+    'delimiter=s'  => \$csv_delim,
     'debug'    => \$debug,
     'update'   => \$doo_eet,
 );
+
+my %DELIMITER = ( 'comma' => q{,},
+                  'tab'   => "\t",
+                  'pipe'  => q{|},
+                );
 
 if (($infile_name eq '') || ($table_name eq '')){
    print "Something's missing.\n";
@@ -59,7 +66,7 @@ foreach my $map (@datamap_filenames) {
    close $mapfile;
 }
 
-my $csv=Text::CSV->new({ binary => 1 });
+my $csv=Text::CSV->new({ binary => 1, sep_char => $DELIMITER{$csv_delim} });
 my $dbh=C4::Context->dbh();
 my $j=0;
 my $exceptcount=0;
@@ -103,6 +110,14 @@ while (my $line=$csv->getline($io)){
       if ($fields[$i] eq "ignore" || $data[$i] eq ""){
          next;
       }
+      if ($fields[$i] eq "branchcode") {
+         $data[$i] = uc $data[$i];
+      }
+      my $oldval = $data[$i];
+      if ($datamap{$fields[$i]}{$oldval}) {
+         $debug and say "MAPPED: $oldval  TO $datamap{$fields[$i]}{$oldval}";
+         $data[$i] = $datamap{$fields[$i]}{$oldval};
+      }
       if ($fields[$i] eq $borrowercol){
          if ($barprefix ne '' || $barlength > 0) {
             my $curbar = $data[$i];
@@ -124,7 +139,7 @@ while (my $line=$csv->getline($io)){
          if ($borr){
             $data[$i]= $borr;
          }
-         else {
+         elsif ($data[$i] ne 'NULL' && $data[$i] ne ''){
             $exception = "No Borrower";
          }
       } 
@@ -147,7 +162,7 @@ while (my $line=$csv->getline($io)){
             if ($rec->{'itemnumber'}){
                $data[$i] = $rec->{'itemnumber'};
             }
-            else {
+            elsif ($data[$i] ne 'NULL' && $data[$i] ne '') {
                $exception = "No Item";
             }
          }
@@ -161,11 +176,6 @@ while (my $line=$csv->getline($io)){
          }
       }
       if (($data[$i] ne "") && ($fields[$i] ne "suppress")){
-         my $oldval = $data[$i];
-         if ($datamap{$fields[$i]}{$oldval}) {
-            $debug and say "MAPPED: $oldval  TO $datamap{$fields[$i]}{$oldval}";
-            $data[$i] = $datamap{$fields[$i]}{$oldval};
-         }
          $data[$i] =~ s/\"/\\"/g;
          $querystr .= '"'.$data[$i].'",';
       }

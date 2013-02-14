@@ -224,14 +224,20 @@ while () {
    if (exists $itype_map{$this_itype}){
       $this_itype = $itype_map{$this_itype};
    }
+
+my $barcode;
 ITMFIELD:
    foreach my $field ($record->field("852")){
       $j++;
       if (!$field->subfield('p')){
+#change this to autobarcode the items if no barcode....jn
+         $barcode="AUTO".sprintf("%05d",$i)."-".$j;
          $bad_852_nobarcode++;
-         next ITMFIELD;;
+#         next ITMFIELD;;
       }
-      my $barcode = $field->subfield('p');
+      if ($field->subfield('p')) {
+          $barcode = $field->subfield('p');
+      }
       $itype{$barcode} = $this_itype;
       $loc{$barcode} = $field->subfield('k') || "";
       $itemcall{$barcode} = $field->subfield('h') || "";
@@ -247,13 +253,13 @@ ITMFIELD:
       if (exists $type_loc_map{$this_itype}{$loc{$barcode}}){
          $itype{$barcode} =  $type_loc_map{$this_itype}{$loc{$barcode}};
       }
-      if (exists $type_call_map{$this_itype}{$field->subfield('h')}){
-         $itype{$barcode} = $type_call_map{$this_itype}{$field->subfield('h')};
-      }
-      if (exists $type_loc_coll_map{$this_itype}{$field->subfield('k')}{$field->subfield('j')}){
-         $debug and print "oi";
-         $itype{$barcode} =  $type_loc_coll_map{$this_itype}{$field->subfield('k')}{$field->subfield('j')};
-      } 
+#      if (exists $type_call_map{$this_itype}{$field->subfield('h')}) {
+#         $itype{$barcode} = $type_call_map{$this_itype}{$field->subfield('h')};
+#      }
+#      if (exists $type_loc_coll_map{$this_itype}{$field->subfield('k')}{$field->subfield('j')}){
+#         $debug and print "oi";
+#         $itype{$barcode} =  $type_loc_coll_map{$this_itype}{$field->subfield('k')}{$field->subfield('j')};
+#      } 
 
       $itype_counts{$itype{$barcode}}++;
       
@@ -280,7 +286,7 @@ ITMFIELD:
 
       $itmprice{$barcode} = 0;
       $replprice{$barcode} = 0;
-      if ($field->subfield('9') ne q{}){
+      if ( $field->subfield('9')  && ( $field->subfield('9') ne q{} ) ){
         $itmprice{$barcode} = $field->subfield('9');
         $replprice{$barcode} = $itmprice{$barcode};
       }
@@ -320,7 +326,7 @@ ITMFIELD:
          my $day = substr($field->subfield('m'),6,2);
          $lastborrowed{$barcode} = sprintf "%d-%02d-%02d",$year,$month,$day;
       }
-      if ($field->subfield('t') ne q{}){
+      if ( $field->subfield('t') && ($field->subfield('t') ne q{}) ){
          $copynum{$barcode} = $field->subfield('t');
       }
       my $status = $field->subfield('a') || '';
@@ -352,7 +358,7 @@ ITMFIELD:
         "y" => $itype{$key},
         "g" => $itmprice{$key},
         "v" => $replprice{$key},
-        "2" => "lcc",
+        "2" => "ddc",
       );
       $itmtag->update( "x" => $itemnote{$key} )  if ($itemnote{$key});
       $itmtag->update( "h" => $enumchron{$key} ) if ($enumchron{$key});
