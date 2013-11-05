@@ -6,6 +6,12 @@
 #
 # -D Ruth Bavousett
 #
+# Comments:
+#
+#  If you are deduping LARGE numbers of bibliographic records you may run into problems with line 129 
+#  group_concat may truncate results.  If so, then you need to login in to mysql as root and 
+#  SET GLOBAL group_concat_max_len=5000;  to reset the max length allowed. -jn 6/27/2012
+#
 #---------------------------------
 
 use strict;
@@ -119,11 +125,12 @@ print "\n$i records read from database.\n$inserted lines inserted to dedupe tabl
 print "$field_not_present records not considered due to missing or invalid field.\n\n";
 
 my $dupes_found=0;
+my $reserves_modified=0;
 my $dupe_sth=$dbh->prepare("SELECT GROUP_CONCAT(biblionumber ORDER BY biblionumber DESC SEPARATOR '~') AS biblionumbers, normal_data FROM temp_dedupe GROUP BY normal_data HAVING COUNT(normal_data)>1 ORDER BY normal_data");
 $dupe_sth->execute();
 MATCH:
 while (my $row=$dupe_sth->fetchrow_hashref()){
-   last MATCH if ($debug and $dupes_found>0);
+   last MATCH if ($debug and $dupes_found>1000000);
    print "-------------------------------------------------------\n";
    $dupes_found++;
    my @biblios = split(/~/,$row->{biblionumbers});
@@ -157,14 +164,13 @@ while (my $row=$dupe_sth->fetchrow_hashref()){
       }
 
       print "$thisone (Len: $reclen): $field~$title~$author\n";
+      my ($rescount,undef) = &GetReservesFromBiblionumber($thisone);
+      if ($rescount > 0) {
+         $reserves_modified = 1;
+         print "Holds updated!\n";
+      }
    }
    print "USING RECORD $best_rec\n";
-   my $reserves_modified = 0;
-   my ($rescount,undef) = &GetReserves($thisone);
-   if ($rescount > 0) {
-      $reserves_modified = 1;
-      print "Holds updated!\n";
-   }
  
    if ($doo_eet){
       foreach my $thisone (@biblios){

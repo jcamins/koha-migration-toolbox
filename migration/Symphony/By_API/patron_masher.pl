@@ -19,6 +19,7 @@ my $infile_name = "";
 my $outfile_name = "";
 my $passfile_name = "";
 my $attribfile_name = "";
+my $codesfile_name = "";
 my $create = 0;
 my $patron_cat_mapfile;
 my %patron_cat_map;
@@ -27,11 +28,15 @@ my %branch_map;
 my $toss_profile_string = "";
 my %profiles_to_toss;
 my $upcase_name=0;
+my $suffix_field = 'surname';
 my $cat1_tag = "";
 my $cat2_tag = "";
 my $cat3_tag = "";
 my $cat4_tag = "";
 my $cat5_tag = "";
+my @datamap_filenames;
+my %datamap;
+my @xinfo_tags;
 my $default_privacy = 0;
 
 GetOptions(
@@ -39,6 +44,7 @@ GetOptions(
     'out=s'           => \$outfile_name,
     'pass=s'          => \$passfile_name,
     'attrib=s'        => \$attribfile_name,
+    'codes=s'         => \$codesfile_name,
     'toss-profiles=s' => \$toss_profile_string,
     'patron-cat=s'    => \$patron_cat_mapfile,
     'branch-map=s'    => \$branch_mapfile,
@@ -47,7 +53,10 @@ GetOptions(
     'cat3=s'          => \$cat3_tag,
     'cat4=s'          => \$cat4_tag,
     'cat5=s'          => \$cat5_tag,
+    'xinfo=s'         => \@xinfo_tags,
+    'suffix=s'        => \$suffix_field,
     'default_privacy=s' => \$default_privacy,
+    'map=s'           => \@datamap_filenames,
     'upcase_name'     => \$upcase_name,
     'debug'           => \$debug,
 );
@@ -82,6 +91,23 @@ if ($patron_cat_mapfile){
       $patron_cat_map{uc $data[0]} = uc $data[1];
    }
    close $mapfile;
+}
+
+foreach my $map (@datamap_filenames) {
+   my ($mapsub,$map_filename) = split (/:/,$map);
+   my $csv = Text::CSV_XS->new();
+   open my $mapfile,'<',$map_filename;
+   while (my $row = $csv->getline($mapfile)) {
+      my @data = @$row;
+      $datamap{$mapsub}{$data[0]} = $data[1];
+   }
+   close $mapfile;
+}
+
+my %xinfo_maps;
+foreach my $xinfo (@xinfo_tags) {
+   my ($tag_in,$tag_out) = split (/:/,$xinfo);
+   $xinfo_maps{$tag_in} = $tag_out;
 }
 
 open my $in,"<$infile_name";
@@ -161,6 +187,16 @@ while (my $line = readline($in)) {
          $j++;
          $categories{$thisborrower{'categorycode'}}++;
          $branches{$thisborrower{'branchcode'}}++;
+         for my $tag (keys %thisborrower) {
+            my $oldval = $thisborrower{$tag};
+            if ($datamap{$tag}{$oldval}) {
+               $thisborrower{$tag} = $datamap{$tag}{$oldval};
+               if ($datamap{$tag}{$oldval} eq 'NULL') {
+                  delete $thisborrower{$tag};
+               }
+            }
+         }
+
          $thisborrower{'privacy'} = $default_privacy;
          for my $k (0..scalar(@borrower_fields)-1){
             if ($thisborrower{$borrower_fields[$k]}){
@@ -198,10 +234,11 @@ while (my $line = readline($in)) {
    }
    next if ($toss_this_borrower);
    $debug and print $line."\n";
-   $line =~ /^\.([\w\/]+)\./;
-   my $thistag = $1;
-   $line =~ /\|a(.*)$/;
-   my $content = $1;
+   my ($thistag) = $line =~ /^\.([\w\/]+)\./;
+   my ($content) = $line =~ /^\.[\w\/]+\.\s+(.*)$/;
+   $content =~ s/^\s+//;
+   $content =~ s/^\|a//;
+   $content =~ s/\\//;
    $debug and print "$thistag ~~ $content ~~\n";
    
    $note = 0 if ($thistag);
@@ -224,6 +261,8 @@ while (my $line = readline($in)) {
       $content =~ s/  / /g;
       $content =~ s/^ //g;
       $content =~ s/ $//g;
+      $content =~ s/\.$//g;
+      $content =~ s/\.,/,/g;
       if ($content =~ /name_not_yet_supplied/i){
          $toss_this_borrower=1;
          next;
@@ -240,7 +279,19 @@ while (my $line = readline($in)) {
          $thisborrower{'surname'} = $content;
          $thisborrower{'firstname'} = "";
       }
+      if ($suffix_field ne 'surname') {
+         foreach my $suffix (qw/JR SR III IV/) {
+            if ($thisborrower{'surname'} =~ m/($suffix)$/i) {
+               $thisborrower{$suffix_field} = $1;
+               $thisborrower{surname} =~ s/($suffix)$//i;
+            }
+         }
+      }
       $thisborrower{'firstname'} =~ s/^ //g;
+      $thisborrower{'surname'} =~ s/ $//g;
+      if ($thisborrower{surname} eq '') {
+         ($thisborrower{firstname},$thisborrower{surname}) = $thisborrower{firstname} =~ /(\w+) (.*)/;
+      }
       if ($upcase_name){
          $thisborrower{'surname'} = uc($thisborrower{'surname'});
          $thisborrower{'firstname'} = uc($thisborrower{'firstname'});
@@ -286,31 +337,56 @@ while (my $line = readline($in)) {
    $thisborrower{'dateofbirth'} = _process_date($content) if ($thistag eq "USER_BIRTH_DATE");
 
    if ($thistag eq "USER_CATEGORY1" && $cat1_tag ne q{}){
-      $addedcode .= ",$cat1_tag:$content";
+      if ($cat1_tag eq uc($cat1_tag)) {
+         $addedcode .= ",$cat1_tag:$content";
+      }
+      else {
+         $thisborrower{$cat1_tag} = $content;
+      }
       $cat1s{$content}++;
       next;
    }
 
    if ($thistag eq "USER_CATEGORY2" && $cat2_tag ne q{}){
-      $addedcode .= ",$cat2_tag:$content";
+      if ($cat2_tag eq uc($cat2_tag)) {
+         $addedcode .= ",$cat2_tag:$content";
+      }
+      else {
+         $thisborrower{$cat2_tag} = $content;
+      }
       $cat2s{$content}++;
       next;
    }
 
    if ($thistag eq "USER_CATEGORY3" && $cat3_tag ne q{}){
-      $addedcode .= ",$cat3_tag:$content";
+      if ($cat3_tag eq uc($cat3_tag)) {
+         $addedcode .= ",$cat3_tag:$content";
+      }
+      else {
+         $thisborrower{$cat3_tag} = $content;
+      }
       $cat3s{$content}++;
       next;
    }
 
    if ($thistag eq "USER_CATEGORY4" && $cat4_tag ne q{}){
-      $addedcode .= ",$cat4_tag:$content";
+      if ($cat4_tag eq uc($cat4_tag)) {
+         $addedcode .= ",$cat4_tag:$content";
+      }
+      else {
+         $thisborrower{$cat4_tag} = $content;
+      }
       $cat4s{$content}++;
       next;
    }
 
    if ($thistag eq "USER_CATEGORY5" && $cat5_tag ne q{}){
-      $addedcode .= ",$cat5_tag:$content";
+      if ($cat5_tag eq uc($cat5_tag)) {
+         $addedcode .= ",$cat5_tag:$content";
+      }
+      else {
+         $thisborrower{$cat5_tag} = $content;
+      }
       $cat5s{$content}++;
       next;
    }
@@ -369,6 +445,7 @@ while (my $line = readline($in)) {
          $thisborrower{'borrowernotes'} .= $content." ";
       }
       $thisborrower{'phone'} = $content if ($thistag eq "DAYPHONE");
+      $thisborrower{'phone'} = $content if ($thistag eq "HOMEPHONE");
       $thisborrower{'phone'} = $content if ($thistag eq "PHONE");
       $thisborrower{'phonepro'} = $content if ($thistag eq "WORKPHONE");
       next;
@@ -381,6 +458,19 @@ while (my $line = readline($in)) {
       $debug and print $line."\n" if ($thistag eq "");
       next;
    }
+ 
+   if (exists $xinfo_maps{$thistag}) {
+      if ($xinfo_maps{$thistag} eq uc($xinfo_maps{$thistag})) {
+         $content =~ s/,/\-/g;
+         $content =~ s/\"/'/g;
+         $addedcode .= ",$xinfo_maps{$thistag}:$content";
+      }
+      else {
+         $thisborrower{$xinfo_maps{$thistag}} = $content;
+      }
+      next;
+   }
+
    $debug and print $line if ($thistag eq "");
 }
 
@@ -401,15 +491,21 @@ if (%thisborrower && !$toss_this_borrower){
       }
       print $out ",";
    }
+   print $out "\n";
+
    if ($addedcode){
       $addedcode =~ s/^,//;
-      print $out '"'."$addedcode".'"';
+      print $attrib $thisborrower{cardnumber}.',"'."$addedcode".'"'."\n";
    }
-   print $out "\n";
-}         
+
+   if (exists $thisborrower{password}) {
+      print $pass $thisborrower{cardnumber}.','.$thisborrower{password}."\n";
+   }
+}
+$borrowers_tossed++ if ($toss_this_borrower);
 
 print "\n\n$i lines read.\n$j borrowers found.\n$borrowers_tossed borrowers tossed out.\n";
-open my $sql,">","patron_codes.sql";
+open my $sql,">",$codesfile_name;
 print "BRANCH COUNTS\n";
 foreach my $kee (sort keys %branches){
    print "$kee: $branches{$kee}\n";

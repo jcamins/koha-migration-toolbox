@@ -1,0 +1,92 @@
+Request BACKUP copy of the Sagebrush/InfoCentre database.
+
+****Notes from Converse Free
+The database backup file we sent you was created with the "osql" command 
+on our server (Windows Server 2003, version 5.2 SP2). Specifically, we use 
+a script daily to create backups. The exact osql command in that script is:
+
+osql -U sa -P sagepw -S 127.0.0.1\Sagebrush -Q "backup database IC to disk = 'C:\InfoCentreServer\data\InfoCentre\backups\new_file.backup' with INIT"
+*************
+
+The backup file (in the above example was called 201109150920_IC.backup) is
+dropped into the Dropbox.
+
+Download SQLExpress onto computer (free version).  Install.
+Connect to database engine (my default is OWNER-PC\SQLEXPRESS)
+On Database in Object Explorer window, right click and create new database
+On Database, right click and say 'Restore Database'
+Select new database in Destination
+Select the backcup file (From device) in the Source area. 
+Click on Options in the left window pane.
+Select Overwrite the existing database (with Replace)
+Click OK
+
+After restored. Click on New Query
+
+
+*******************
+METHOD 2
+
+You can also access if they send you a copy of the IC.mdf AND the IC_log.mdf files.  
+Place these in the following directory:
+c:\Program Files\Microsoft SQL Server\MSSQL10_50.SQLEXPRESS\MSSQL\DATA\
+
+In SQL Server Management Studio: 
+Right click on Database and select Attach
+Click on Add button
+Select IC.mdf from the directory
+click OK
+
+Run queries.
+
+
+***************
+
+QUERIES
+
+Right click to select "design editor" (graphical interface ala Access db)
+or enter the query below and click Execute! 
+
+CIRCULATION
+
+SELECT     Sagebrush.checkouts.due_date, Sagebrush.checkouts.trans_date, Sagebrush.checkouts.date_edited, Sagebrush.patrons.patron_id, Sagebrush.copies.copy_id
+FROM         Sagebrush.checkouts INNER JOIN
+                      Sagebrush.copies ON Sagebrush.checkouts.copy_oid = Sagebrush.copies.copy_oid INNER JOIN
+                      Sagebrush.patrons ON Sagebrush.checkouts.patron_oid = Sagebrush.patrons.patron_oid
+
+old query SELECT     Sagebrush.checkouts.*, Sagebrush.copies.copy_oid AS Expr1, Sagebrush.copies.copy_id, Sagebrush.copies.call_number, Sagebrush.patrons.patron_oid $
+                      Sagebrush.patrons.patron_id, Sagebrush.patrons.surname, Sagebrush.patrons.first_name
+FROM         Sagebrush.copies INNER JOIN
+                      Sagebrush.checkouts ON Sagebrush.copies.copy_oid = Sagebrush.checkouts.copy_oid INNER JOIN
+                      Sagebrush.patrons ON Sagebrush.checkouts.patron_oid = Sagebrush.patrons.patron_oid
+
+The copy_id is the itembarcode (852$p) and the patron_id is the patron cardnumber.
+
+
+PATRON extract
+
+INITIAL EXTRACT:
+SELECT     Sagebrush.patrons.patron_id, Sagebrush.patrons.privileges_expire, Sagebrush.patrons.first_name, Sagebrush.patrons.middle_name, Sagebrush.patrons.surname, 
+                      Sagebrush.patrons.email, Sagebrush.patrons.phone, Sagebrush.patrons.other_phone, Sagebrush.patrons.address1, Sagebrush.patrons.address2, 
+                      Sagebrush.patrons.city, Sagebrush.patrons.province_state, Sagebrush.patrons.postal_zip, Sagebrush.patrons.user_defined1, Sagebrush.patrons.user_defined2, 
+                      Sagebrush.patrons.user_defined3, Sagebrush.patron_types.type_name
+FROM         Sagebrush.patrons INNER JOIN
+                      Sagebrush.patron_types ON Sagebrush.patrons.patron_type_oid = Sagebrush.patron_types.patron_type_oid
+
+REVISED EXTRACT: CATCHES THE MESSAGES!!!!
+SELECT     Sagebrush.patrons.patron_id, Sagebrush.patrons.privileges_expire, Sagebrush.patrons.first_name, Sagebrush.patrons.middle_name, Sagebrush.patrons.surname, 
+                      Sagebrush.patrons.email, Sagebrush.patrons.phone, Sagebrush.patrons.other_phone, Sagebrush.patrons.address1, Sagebrush.patrons.address2, 
+                      Sagebrush.patrons.city, Sagebrush.patrons.province_state, Sagebrush.patrons.postal_zip, Sagebrush.patrons.user_defined1, Sagebrush.patrons.user_defined2, 
+                      Sagebrush.patrons.user_defined3, Sagebrush.patrons.user_defined9, Sagebrush.patrons.user_defined10, Sagebrush.patrons.date_added, 
+                      Sagebrush.patron_types.type_name, Sagebrush.patron_messages.subject, Sagebrush.patron_messages.message, Sagebrush.patron_messages.from_field
+FROM         Sagebrush.patrons LEFT OUTER JOIN
+                      Sagebrush.patron_messages ON Sagebrush.patrons.patron_oid = Sagebrush.patron_messages.patron_oid LEFT OUTER JOIN
+                      Sagebrush.patron_types ON Sagebrush.patrons.patron_type_oid = Sagebrush.patron_types.patron_type_oid
+
+
+FINES:
+SELECT     Sagebrush.fines.amount_paid, Sagebrush.fines.fine_amount, Sagebrush.fines.note, Sagebrush.fines.school_oid, Sagebrush.fines.date_edited, 
+                      Sagebrush.copies.copy_id, Sagebrush.fines.copy_oid, Sagebrush.fines.patron_oid, Sagebrush.patrons.patron_id
+FROM         Sagebrush.fines LEFT OUTER JOIN
+                      Sagebrush.patrons ON Sagebrush.fines.patron_oid = Sagebrush.patrons.patron_oid LEFT OUTER JOIN
+                      Sagebrush.copies ON Sagebrush.fines.copy_oid = Sagebrush.copies.copy_oid

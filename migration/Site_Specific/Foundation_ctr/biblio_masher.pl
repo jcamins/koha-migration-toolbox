@@ -70,6 +70,8 @@ my %leaders=(
                'Monograph'           => '     nam a22        4500',
                'Monograph|DVD'       => '     nam a22        4500',
                'Pamphlet'            => '     nam a22        4500',
+               'Sound recording'     => '     nim a22        4500',
+               'Video recording'     => '     ngm a22        4500',
                'Sound Recording'     => '     nim a22        4500',
                'Video Recording'     => '     ngm a22        4500',
             );
@@ -81,24 +83,43 @@ my %locations=(
                'New York'      => 'NEWYORK',
                'San Francisco' => 'SANFRAN',
               );
+my %itemtypes=(
+               'Article'             => 'ART',
+               'CD-ROM'              => 'CD',
+               'DVD'                 => 'DVD',
+               'Dissertation'        => 'DIS',
+               'Electronic resource' => 'COM',
+               'Monograph'           => 'REF',
+               'Monograph|DVD'       => 'REF',
+               'Pamphlet'            => 'PAM',
+               'Sound recording'     => 'SND',
+               'Video recording'     => 'VID',
+               'Sound Recording'     => 'SND',
+               'Video Recording'     => 'VID',
+            );
+
 my %barcode_counts;
 my $csv = Text::CSV_XS->new({binary => 1, sep_char => "\t"});
-open my $in,"<:encoding(iso-8859-1)",$infile_name;
+open my $in,"<:encoding(cp1252)",$infile_name;
 open my $out,">:utf8",$outfile_name;
-my $line = readline($in);
-chomp $line;
-$line =~ s///g;
-$debug and print "$line\n";
-my @columns = split (/\t/,$line);
+#my $line = readline($in);
+#chomp $line;
+#$line =~ s///g;
+#$debug and print "$line\n";
+#my @columns = split (/\t/,$line);
+my $line = $csv->getline($in);
+my @columns = @$line;
 
 RECORD:
-while (my $line=readline($in)){
+#while (my $line=readline($in)){
+while (my $line=$csv->getline($in)){
    last RECORD if ($debug and $written>20);
    $i++;
    print '.' unless ($i % 10);
    print "\r$i" unless ($i % 100);
-   $line =~ s///g;
-   my @data=split(/\t/,$line);
+#   $line =~ s///g;
+#   my @data=split(/\t/,$line);
+   my @data = @$line;
    next RECORD if (scalar (@data)==1);
    if (scalar(@data) < 51){
       my $err = "problem record $i\nOld size: ".scalar(@data).'   ';
@@ -188,25 +209,31 @@ while (my $line=readline($in)){
       $fld260->update('b' => $data[14] );
       $valid_260=1;
    }
-    
+   
+   my $done_008; 
    if ($data[15] ne q{}){
       $fld260->update('c' => $data[15] );
       $valid_260=1;
-      my $fld = MARC::Field->new('008','      s'.$data[15]);
-      $rec->insert_fields_ordered($fld);
+      $data[15]=~ m/(\d\d\d\d)/;
+      my $year_only = $1;
+      if ($year_only) {
+         my $fld = MARC::Field->new('008','      s'.$year_only);
+         $rec->insert_fields_ordered($fld);
+         $done_008 = 1;
+      }
    }
    if ($data[18] ne q{}){
       $fld260->update('c' => $data[18] );
       $valid_260=1;
-      my $fld = MARC::Field->new('008','      s'.$data[18]);
-      $rec->insert_fields_ordered($fld);
+      $data[15]=~ m/(\d\d\d\d)/;
+      my $year_only = $1;
+      if ($year_only && !$done_008) {
+         my $fld = MARC::Field->new('008','      s'.$year_only);
+         $rec->insert_fields_ordered($fld);
+         $done_008 = 1;
+      }
    }
    
-   if ($valid_260){
-      $fld260->delete_subfield(code => '8');
-      $rec->insert_grouped_field($fld260);
-   }
-
    if ($data[1] eq "Article"){
       my $journ = $data[16];
       my $subj = $data[18].', Volume/Issue '.$data[17].', '.$data[19];
@@ -214,7 +241,22 @@ while (my $line=readline($in)){
                                     't' => $journ,
                                     'g' => $subj);
       $rec->insert_grouped_field($fld);
+      $fld260->update('b' => $journ);
+      $fld260->update('g' => 'vol. '.$data[17]); 
+      $valid_260=1;
+      $data[13]=~ m/(\d\d\d\d)/;
+      my $year_only = $1;
+      if ($year_only && !$done_008) {
+         my $fld = MARC::Field->new('008','      s'.$year_only);
+         $rec->insert_fields_ordered($fld);
+      }
    }
+
+   if ($valid_260){
+      $fld260->delete_subfield(code => '8');
+      $rec->insert_grouped_field($fld260);
+   }
+
    if ($data[16] ne q{}){
       my $fld = MARC::Field->new( 440,' ',' ','a' => $data[16]);
       $rec->insert_grouped_field($fld);
@@ -240,37 +282,40 @@ while (my $line=readline($in)){
    }
 
    if ($data[25] ne q{}){
-      my ($first,$rest) = split(/\-\-/,$data[25],2);
-      my $fld = MARC::Field->new( 653,' ',' ','a' => $first );
-      if ($rest){
-         foreach my $this (split(/\-\-/,$rest)){
-            $fld->add_subfields( 'x' => $this);
-         }
-      }
+      my $fld = MARC::Field->new( 902,' ',' ','a' => $data[25] );
+      #my ($first,$rest) = split(/\-\-/,$data[25],2);
+      #my $fld = MARC::Field->new( 653,' ',' ','a' => $first );
+      #if ($rest){
+      #   foreach my $this (split(/\-\-/,$rest)){
+      #      $fld->add_subfields( 'x' => $this);
+      #   }
+      #}
       $rec->insert_grouped_field($fld);
    }
 
    if ($data[26] ne q{}){
       foreach my $this (split(/\|/,$data[26])){
-         my ($first,$rest) = split(/\-\-/,$this,2);
-         my $fld = MARC::Field->new( 650,' ',' ','a' => $first );
-         if ($rest){
-            foreach my $this1 (split(/\-\-/,$rest)){
-               $fld->add_subfields( 'x' => $this1);
-            }
-         }
+         my $fld = MARC::Field->new(650,' ',' ','a' => $this);
+         #my ($first,$rest) = split(/\-\-/,$this,2);
+         #my $fld = MARC::Field->new( 650,' ',' ','a' => $first );
+         #if ($rest){
+         #   foreach my $this1 (split(/\-\-/,$rest)){
+         #      $fld->add_subfields( 'x' => $this1);
+         #   }
+         #}
          $rec->insert_grouped_field($fld);
       }
    }
 
    if ($data[27] ne q{}){
       my ($first,$rest) = split(/\-\-/,$data[27],2);
-      my $fld = MARC::Field->new( 690,' ',' ','a' => $first );
-      if ($rest){
-         foreach my $this (split(/\-\-/,$rest)){
-            $fld->add_subfields( 'x' => $this);
-         }
-      }
+      my $fld = MARC::Field->new( 690,' ',' ','a' => $data[27] );
+      #my $fld = MARC::Field->new( 690,' ',' ','a' => $first );
+      #if ($rest){
+      #   foreach my $this (split(/\-\-/,$rest)){
+      #      $fld->add_subfields( 'x' => $this);
+      #   }
+      #}
       $rec->insert_grouped_field($fld);
    }
     
@@ -280,12 +325,12 @@ while (my $line=readline($in)){
    }
     
    if ($data[29] ne q{}){
-      my $fld = MARC::Field->new( 500,' ',' ','a' => $data[29] );
+      my $fld = MARC::Field->new( 905,' ',' ','a' => $data[29] );
       $rec->insert_grouped_field($fld);
    }
 
    if ($data[43] ne q{}){
-      my $fld = MARC::Field->new( 590,' ',' ','a' => $data[43] );
+      my $fld = MARC::Field->new( 530,' ',' ','a' => $data[43] );
       $rec->insert_grouped_field($fld);
    }
 
@@ -295,7 +340,7 @@ while (my $line=readline($in)){
    }
 
    if ($data[31] ne q{}){
-      my $fld = MARC::Field->new( 590,' ',' ','a' => $data[31] );
+      my $fld = MARC::Field->new( 910,' ',' ','a' => $data[31] );
       $rec->insert_grouped_field($fld);
    }
     
@@ -339,24 +384,23 @@ while (my $line=readline($in)){
       my $fld = MARC::Field->new( 952,' ',' ',
                                    'a' => $locations{$loc},
                                    'b' => $locations{$loc},
+                                   'd' => _process_date($data[32]),
                                    'p' => 'TMP-'.$i.'-'.$locations{$loc});
       if ($loc eq "Internet"){
-         $fld->update( 'y' => 'REF','o' => 'Online', '7' => 3 );
+         $fld->update( 'y' => 'ONLINE','o' => 'Online' );
       }
       else{
-         if ($locations{$loc} eq "CLEVELAND" || $locations{$loc} eq "ATLANTA"){
-            $fld->update( 'y' => 'CIRC' );
-         }
-         else {
-            $fld->update( 'y' => 'REF' );
-         }
+         $fld->update ( 'y' => $itemtypes{$data[1]} );
+        # if (($locations{$loc} eq "CLEVELAND" || $locations{$loc} eq "ATLANTA") && $data[1] eq 'Monograph') {
+        #    $fld->update( 'y' => 'CIRC' );
+        # }
       }
       if ($data[3] ne q{}){
          $fld->update('o' => $data[3] );
       }
 
       if ($data[4] ne q{}){
-         $fld->update( 'o' => 'Vertical file drawer '.$data[4] );
+         $fld->update( 'o' => 'Subject file: '.$data[4] );
       }
       $rec->insert_grouped_field($fld);
    }
@@ -370,3 +414,19 @@ close $out;
 close $in;
 
 print "\n\n$i records read.\n$written records written.\n";
+
+exit;
+
+sub _process_date {
+   my $date = shift;
+   return if $date eq q{};
+   my ($month,$day,$year) = split '/', $date;
+   if ($year <=12 ) {
+      $year += 2000;
+   }
+   if ($year < 100) {
+     $year += 1900;
+   }
+   return sprintf "%4d-%02d-%02d",$year,$month,$day;
+}
+

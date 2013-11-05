@@ -42,7 +42,7 @@ while (my $line = $csv->getline($infl)){
    print "\r$i" unless ($i % 100);
    my @data=@$line;
    $debug and print Dumper(@data);
-   my $hashkee = "$data[6]:$data[2]:$data[3]:$data[4]:$data[5]";
+   my $hashkee = "$data[7]:$data[2]:$data[3]:$data[5]:$data[6]";
    $quintmap{$hashkee}++;
 }
 close $infl;

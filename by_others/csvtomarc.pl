@@ -447,7 +447,7 @@ GetOptions(
     'output|o=s'        => \$output_file,
     'mapping|m=s'       => \@mapping_cli,
     'dateformat|d=s'    => \$date_format,
-    'strict!'            => \$strict,
+    'strict!'           => \$strict,
     'preview|p=i'       => \$preview,
     'configfile|c'      => \$config,
     'kohaconf=s'        => \$koha_conf,

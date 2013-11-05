@@ -12,6 +12,7 @@
 
 use strict;
 use warnings;
+use autodie;
 use Data::Dumper;
 use Getopt::Long;
 use Text::CSV;
@@ -73,7 +74,7 @@ if ($extended) {
 
 RECORD:
 while (my $line=$csv->getline($in)){
-   $debug and last if ($i > 0);
+   $debug and last if ($i > 10);
    $i++;
    print "." unless ($i % 10);
    print "\r$i" unless ($i % 100);
@@ -83,6 +84,7 @@ while (my $line=$csv->getline($in)){
    my $message = '';
    my @columns = @$line; 
    foreach my $key (@columnkeys){
+      $debug and print "KEY $key\n";
       if (defined($csvkeycol{$key}) and $columns[$csvkeycol{$key}] =~ /\S/){
          $borrower{$key} = $columns[$csvkeycol{$key}];
       }

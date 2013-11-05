@@ -29,7 +29,7 @@ GetOptions(
 
 my $dbh=C4::Context->dbh();
 my $i=0;
-my $find = $dbh->prepare("SELECT borrowernumber,cardnumber,userid FROM borrowers WHERE flags=0");
+my $find = $dbh->prepare("SELECT borrowernumber,cardnumber,userid FROM borrowers WHERE flags=0 or flags is null");
 $find->execute();
 while (my $row=$find->fetchrow_hashref()){
    $i++;

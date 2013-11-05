@@ -39,10 +39,12 @@ my $i=0;
 
 my $infile_name = q{};
 my $field_to_change = q{};
+my $csv_delim            = 'comma';
 
 GetOptions(
    'in:s'     => \$infile_name,
    'field:s'  => \$field_to_change,
+'delimiter=s'  => \$csv_delim,
    'debug'    => \$debug,
    'update'   => \$doo_eet,
 );
@@ -52,20 +54,25 @@ if (($infile_name eq q{}) || ($field_to_change eq q{})){
    exit;
 }
 
+my %delimiter = ( 'comma' => ',',
+                  'tab'   => "\t",
+                  'pipe'  => '|',
+                );
 my $written=0;
 my $item_not_found=0;
-my $csv=Text::CSV_XS->new();
+my $csv=Text::CSV_XS->new({ binary => 1, sep_char => $delimiter{$csv_delim} });
 my $dbh=C4::Context->dbh();
 my $sth=$dbh->prepare("SELECT itemnumber,$field_to_change FROM items WHERE barcode = ?");
 open my $infl,"<",$infile_name;
 
 RECORD:
 while (my $line=$csv->getline($infl)){
-   last RECORD if ($debug and $i>10);
+   last RECORD if ($debug and $written>10);
    $i++;
    print "." unless ($i % 10);
    print "\r$i" unless ($i % 100);
    my @data = @$line; 
+   next RECORD if $data[1] eq '';
    $sth->execute($data[0]);
    my $rec=$sth->fetchrow_hashref();
 

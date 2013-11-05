@@ -42,6 +42,7 @@
 #
 #   For mashing in data in a separate item file:
 #   --matchpoint=<marc>:<colhead>   Matches a MARC field/subfield to a column in the csv, for use as the matching point.
+#   --isbnmatch                     Tells the system to normalize a matchpoint as if it is an ISBN.
 #   --headerrow=<headerrow>         If the file doesn't contain a header row, use this.
 #   --itemcol=<colhead>:<marcsub><~tool><~tool>
 #                    Inserts data from the named column into the 952 subfield listed; i.e. BARCODE:p.  Repeatable.  Suffixable by a tool
@@ -69,6 +70,7 @@ use English qw( -no_match_vars );
 use Getopt::Long;
 use Readonly;
 use Text::CSV_XS;
+use Business::ISBN;
 use Scalar::Util qw(looks_like_number);
 use MARC::File::USMARC;
 use MARC::File::XML;
@@ -91,10 +93,13 @@ my $input_marc_filename  = $NULL_STRING;
 my $input_item_filename  = $NULL_STRING;
 my $output_marc_filename = $NULL_STRING;
 my $output_xml_filename  = $NULL_STRING;
+my $output_leftover_filename = '/dev/null';
 my $codesfile_name       = '/dev/null';
 my $matchpoint           = $NULL_STRING;
 my $drop_noitems         = 0;
 my $barlength            = 0;
+my $isbnmatch            = 0;
+my $keep_942             = 0;
 my $barprefix            = $NULL_STRING;
 my $itemtag              = $NULL_STRING;
 my $charset              = 'marc8';
@@ -102,6 +107,8 @@ my $csv_delim            = 'comma';
 my $header_row           = $NULL_STRING;
 my $pricemap_filename    = $NULL_STRING;
 my $tally_fields         = 'a,b,8,c,y';
+my $itype_default        = $NULL_STRING;
+my $branch_default       = $NULL_STRING;
 my %pricemap;
 my @datamap_filenames;
 my %datamap;
@@ -118,8 +125,11 @@ GetOptions(
     'out=s'        => \$output_marc_filename,
     'item=s'       => \$input_item_filename,
     'xml=s'        => \$output_xml_filename,
+    'leftover=s'   => \$output_leftover_filename,
     'codes=s'      => \$codesfile_name,
     'matchpoint=s' => \$matchpoint,
+    'isbnmatch'    => \$isbnmatch,
+    'keep_942'     => \$keep_942,
     'itemtag=s'    => \$itemtag,
     'charset=s'    => \$charset,
     'delimiter=s'  => \$csv_delim,
@@ -129,6 +139,8 @@ GetOptions(
     'pricemap=s'   => \$pricemap_filename,
     'calldefault=s'=> \@calldefault,
     'pricedefault=s'=> \@pricedefault,
+    'itypedefault=s' => \$itype_default,
+    'branchdefault=s' => \$branch_default,
     'map=s'        => \@datamap_filenames,
     'dropfield=s'  => \@dropfields,
     'dropfield2=s' => \@dropfields2,
@@ -250,8 +262,22 @@ ITEM:
       print '.'    unless ($j % 10);
       print "\r$j" unless ($j % 100);
       #$debug and print Dumper($itemline);
-      if ($itemline->{$match_csv}){
+      if ($itemline->{$match_csv} && $itemline->{$match_csv} ne $NULL_STRING){
          my ($key,undef) = split (/ /,$itemline->{$match_csv});
+         if ($isbnmatch) {
+            my $isbn = Business::ISBN->new($itemline->{$match_csv});
+            if ($isbn && $isbn->is_valid) {
+               my $isbn_13 = $isbn->as_isbn13();
+               if ($isbn_13) {
+                  $isbn_13->fix_checksum();
+                  $key = $isbn_13->{isbn};
+               }
+            }
+         }
+         if ($itemline->{$match_csv} eq $NULL_STRING) {
+            $key = "TEMP".$j;
+         }
+        
          push(@{$itemhash{$key}}, $itemline);
          $items_count++;
       }
@@ -293,6 +319,7 @@ while() {
    eval {$record = $batch->next();};
    if ($@) {
       print "Bogus record skipped.\n";
+      $problem++;
       next RECORD;
    }
    last RECORD unless ($record);
@@ -353,6 +380,16 @@ while() {
       else {
          $match_string = $record->subfield($match_marc,$match_marc_subfield);
       }
+      if ($isbnmatch) {
+         my $isbn = Business::ISBN->new($match_string);
+         if ($isbn && $isbn->is_valid) {
+            my $isbn_13 = $isbn->as_isbn13();
+            if ($isbn_13) {
+               $isbn_13->fix_checksum();
+               $match_string = $isbn_13->{isbn};
+            }
+         }
+      }
       if ($match_string) {
          if ($match_tool) {
             $match_string =~ s/($match_tool)//;
@@ -377,7 +414,7 @@ MATCH:
       }
 
       foreach my $map (@item_mapping) {
-         #$debug and print "COL:$map->{'column'}\n";
+         $debug and print "COL:$map->{'column'}\n";
          if ($match->{$map->{'column'}} ne $NULL_STRING) {
             my $sub = $map->{'subfield'};
             my $data = $match->{$map->{'column'}};
@@ -424,13 +461,22 @@ MATCH:
       }
 
       if (!$field->subfield('y')) {
-         $dropped_itype++;
-         next MATCH;
+         if ($itype_default ne $NULL_STRING) {
+            $field->update( 'y' => $itype_default );
+         } else {
+            $dropped_itype++;
+            next MATCH;
+         }
       }
 
       if (!$field->subfield('a')) {
-         $dropped_branch++;
-         next MATCH;
+         if ($branch_default ne $NULL_STRING) {
+            $field->update( 'a' => $branch_default );
+            $field->update( 'b' => $branch_default );
+         } else {
+            $dropped_branch++;
+            next MATCH;
+         }
       }
 
       foreach my $sub (split /,/, $tally_fields){
@@ -461,23 +507,38 @@ TAG:
             if ($field_in->subfield($map->{'subfield_in'})) {
                my $sub = $map->{'subfield_out'};
                my $tool;
-               if (length($sub) > 1){
+               my $appendflag;
+               if (length($sub) > 2){
                   ($sub,$tool) = split (/~/,$sub,2);
+               }
+               if (length($sub) > 1) {
+                  $sub = substr($sub,0,1);
+                  $appendflag=1;
+                  $debug and print "APPEND";
                }
                my @data_subs = $field_in->subfield($map->{'subfield_in'});
                foreach my $data (@data_subs){
-                  #$debug and print "$sub: $data\n";
+                  $debug and print "$sub: $data\n";
                   if ($tool) {
                      foreach my $thistool (split(/~/,$tool)) {
                         $data = _manipulate_data($thistool,$data);
                      }
                   }
                   if ($data ne $NULL_STRING){
-                     $field->update($sub => $data);
+                     if ($appendflag) {
+                        my $olddata = $field->subfield($sub) || $NULL_STRING;
+                        my $flddata = $olddata . ' ' . $data;
+                        $debug and print "FLDDATA: $flddata\n";
+                        $field->update($sub => $flddata);
+                     }
+                     else {
+                        $field->update($sub => $data);
+                     }
                   }
                }
             }
          }
+         $debug and print $field->as_formatted();
 
          $field->delete_subfield( code => '9' );
 
@@ -493,6 +554,7 @@ TAG:
                $field->update( 'v' => $default_price);
          }
 
+if ($pricemap_filename ne $NULL_STRING) {
          if (!$field->subfield('g') && exists $pricemap{$field->subfield('y')}) {
                $field->update( 'g' => $pricemap{$field->subfield('y')});
          }
@@ -508,7 +570,7 @@ TAG:
          if ($field->subfield('v')==0 && exists $pricemap{$field->subfield('y')}) {
                $field->update( 'v' => $pricemap{$field->subfield('y')});
          }
-
+}
          if ($barprefix ne $NULL_STRING || $barlength > 0) {
             my $curbar = $field->subfield('p');
             my $prefixlen = length($barprefix);
@@ -536,13 +598,22 @@ TAG:
          }
 
          if (!$field->subfield('y')) {
-            $dropped_itype++;
-            next TAG;
+            if ($itype_default ne $NULL_STRING) {
+               $field->update( 'y' => $itype_default );
+            } else {
+               $dropped_itype++;
+               next TAG;
+            }
          }
 
-         if (!field->subfield('a')) {
-            $dropped_branch++;
-            next TAG;
+         if (!$field->subfield('a')) {
+            if ($branch_default ne $NULL_STRING) {
+               $field->update( 'a' => $branch_default );
+               $field->update( 'b' => $branch_default );
+            } else {
+               $dropped_branch++;
+               next TAG;
+            }
          }
 
          foreach my $sub (split /,/, $tally_fields){
@@ -568,7 +639,9 @@ TAG:
       my $field = MARC::Field->new('942',' ',' ','c' => $keep_itype, 
                                                  '0' => $keep_issues,
                                   );
-      $record->insert_fields_ordered($field);
+      if (!$keep_942) {
+         $record->insert_fields_ordered($field);
+      }
    }
 
    foreach my $dropfield (@dropfields2) {
@@ -603,6 +676,32 @@ close $input_file;
 close $output_file;
 $output_xml_file->close();
 
+my @leftovers;
+foreach my $kee (keys %itemhash) {
+   foreach (@{$itemhash{$kee}}) {
+      push (@leftovers,$_);
+   }
+   delete $itemhash{$kee};
+}
+
+open my $leftover_file,'>',$output_leftover_filename;
+foreach my $kee (sort keys %{$leftovers[0]}) {
+   print {$leftover_file} $kee.',';
+}
+print {$leftover_file} "\n";
+foreach my $item (@leftovers) {
+   foreach my $kee (sort keys %{$item}) {
+      if ($item->{$kee} =~ m/\,/) {
+         print {$leftover_file} '"'.$item->{$kee}.'",';
+      }
+      else {
+         print {$leftover_file} $item->{$kee}.',';
+      }
+   }
+   print {$leftover_file} "\n";
+}
+close $leftover_file;
+
 print << "END_REPORT";
 
 $i records read.
@@ -618,21 +717,21 @@ END_REPORT
 
 open my $codes_file,'>',$codesfile_name;
 foreach my $kee (sort keys %{ $tally{a} } ){
-   print {$codes_file} "REPLACE INTO branches (branchcode,branchname) VALUES ('$kee','$kee');\n";
+   print {$codes_file} "INSERT INTO branches (branchcode,branchname) VALUES ('$kee','$kee');\n";
 }
 foreach my $kee (sort keys %{ $tally{b} } ){
    if (!$tally{a}{$kee}) {
-      print {$codes_file} "REPLACE INTO branches (branchcode,branchname) VALUES ('$kee','$kee');\n";
+      print {$codes_file} "INSERT INTO branches (branchcode,branchname) VALUES ('$kee','$kee');\n";
    }
 }
 foreach my $kee (sort keys %{ $tally{y} } ){
-   print {$codes_file} "REPLACE INTO itemtypes (itemtype,description) VALUES ('$kee','$kee');\n";
+   print {$codes_file} "INSERT INTO itemtypes (itemtype,description) VALUES ('$kee','$kee');\n";
 }
 foreach my $kee (sort keys %{ $tally{c} } ){
-   print {$codes_file} "REPLACE INTO authorised_values (category,authorised_value,lib) VALUES ('LOC','$kee','$kee');\n";
+   print {$codes_file} "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('LOC','$kee','$kee');\n";
 }
 foreach my $kee (sort keys %{ $tally{8} } ){
-   print {$codes_file} "REPLACE INTO authorised_values (category,authorised_value,lib) VALUES ('CCODE','$kee','$kee');\n";
+   print {$codes_file} "INSERT INTO authorised_values (category,authorised_value,lib) VALUES ('CCODE','$kee','$kee');\n";
 }
 close $codes_file;
 
@@ -659,7 +758,7 @@ sub _manipulate_data {
    }
    if ($tool eq 'money') {
 #      $data =~ s/[^0-9\.]//g;
-      my $value = $data =~ m/(\d+\.\d\d)/;
+      my ($value) = $data =~ m/(\d+\.\d\d)/;
       $data = $value;
    }
    if ($tool =~ /^if:/) {
@@ -727,6 +826,7 @@ sub _manipulate_data {
                    SEP => 9, OCT => 10, NOV => 11, DEC => 12
                   ); 
       $data = uc $data;
+      print "$data\n";
       $data =~ s/,//;
       my ($monthstr,$day,$year) = split(/ /,$data);
       if ($monthstr && $day && $year){
@@ -744,6 +844,29 @@ sub _manipulate_data {
          if ($data eq "0000-00-00") {
             $data = $NULL_STRING;
          }
+      }
+      else {
+         $data= $NULL_STRING;
+      }
+   }
+   if ($tool eq 'date5') {
+      my %months =(
+                   JAN => 1, FEB => 2,  MAR => 3,  APR => 4,
+                   MAY => 5, JUN => 6,  JUL => 7,  AUG => 8,
+                   SEP => 9, OCT => 10, NOV => 11, DEC => 12
+                  ); 
+      $data = uc $data;
+      $data =~ s/,//;
+      my ($day,$monthstr,$year) = split(/\-/,$data);
+      my @time = localtime();
+      my $thisyear = $time[5]+1900;
+      $thisyear = substr($thisyear,2,2);
+      if ($year && $year <= $thisyear) {
+         $year += 100;
+      }
+      $year+= 1900;
+      if ($monthstr && $day && $year){
+         $data = sprintf "%4d-%02d-%02d",$year,$months{$monthstr},$day;
       }
       else {
          $data= $NULL_STRING;

@@ -58,6 +58,7 @@ while (my $row = $sth->fetchrow_hashref()){
   print "\r$i" unless ($i % 100);
 
   my $record = GetMarcBiblio($row->{biblionumber});
+  next RECORD if !$record;
   next RECORD if (!$record->field(440));
 
   my $oldfield = $record->field('440');

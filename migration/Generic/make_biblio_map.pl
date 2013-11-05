@@ -8,10 +8,9 @@
 #
 #---------------------------------
 
-use strict;
-use warnings;
 use Data::Dumper;
 use Getopt::Long;
+use Modern::Perl;
 use C4::Context;
 use C4::Biblio;
 use C4::Items;
@@ -64,33 +63,41 @@ while (my $row=$sth->fetchrow_hashref()){
    print "\r$i" unless ($i % 100);
    $marc_sth->execute($row->{biblionumber});
    my $rec = $marc_sth->fetchrow_hashref();
+   $debug and print Dumper($rec);
    my $marc;
    eval {$marc = MARC::Record->new_from_usmarc($rec->{marc}); };
    if ($@){
       print "bogus record skipped\n";
       next RECORD;
    }
+   $debug and print Dumper($marc);
    my $field;
    my $data;
-   if ($tagfield < 10){
-      my $tagg = $marc->field($tagfield);
-      if ($tagg){
+   my $this_one = 0;
+TAGG:
+   foreach my $tagg ($marc->field($tagfield)) {
+      if ($tagfield < 10){
          $field = $tagg->data();
       }
+      else{
+         $field = $tagg->subfield($tagsubfield);
+      }
+      $debug and say "$field";
+      if (!$field){
+         next TAGG;
+      }
+      $field =~ s/\"/'/g;
+      if ($field =~ m/\,/){
+         $field = '"'.$field.'"';
+      }
+      print {$out} "$field,$row->{biblionumber}\n";
+      $written++;
+      $this_one = 1;
    }
-   else{
-      $field = $marc->subfield($tagfield,$tagsubfield);
-   }
-   if (!$field){
+   if (!$this_one) {
       $field_not_present++;
       next RECORD;
    }
-   $field =~ s/\"/'/g;
-   if ($field =~ m/\,/){
-      $field = '"'.$field.'"';
-   }
-   print {$out} "$field,$row->{biblionumber}\n";
-   $written++;
 }
 
 close $out;

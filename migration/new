@@ -1,8 +1,0 @@
-CyberTools/temp_item_masher.pl:   my $rec = MARC::Record->new();
-Binary file Dynix_Classic/.biblio_masher.pl.swp matches
-Generic/make_map_file.pl:   eval {$marc = MARC::Record->new_from_usmarc($rec->{marc}); };
-Generic/authority_builder.pl:   my $new_record = MARC::Record->new();
-Site_Specific/CGJungNYC/journal_article_masher.pl:   my $rec = MARC::Record->new();
-Site_Specific/Foundation_ctr/biblio_masher.pl:   my $rec = MARC::Record->new();
-Symphony/By_REPORTS/holds_masher_2.pl:   my $marc = MARC::Record->new_from_usmarc($rawrec->{marc});
-Voyager/Site/Redwoods_gifts_mfhd.pl:      my $record = MARC::Record->new_from_usmarc($data[1]);
