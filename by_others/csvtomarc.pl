@@ -350,6 +350,10 @@ Specifies a custom field separator character for the items file. If this is
 not supplied, it will be assumed to be the same as for the biblio file. It
 may be '\t' to indicate tab.
 
+=item B<--quotechar>
+
+Specifies a custom quote character. Defaults to double quote.
+
 =item B<--leader>
 
 Specifies the leader to use for the MARC records. Defaults to
@@ -391,8 +395,23 @@ at B<http://www.loc.gov/standards/codelists/languages.xml>.
 
 =item B<--reduce>=I<column>
 
-Use the specified column as a matching key to combine multiple rows in the CSV
-into a single MARC record.
+Use the specified comma-separated columns as a matching key to combine multiple
+rows in the CSV into a single MARC record.
+
+=item B<--requirereduce>
+
+If set, at least one of the fields being used for record reduction must have
+data or the line will be skipped.
+
+=item B<--reduceblank>
+
+If set, all records lacking any data in the reduce key fields will be reduced
+to one record. No effect if B<--requirereduce> is set.
+
+=item B<--allowblank>
+
+If set, process records even if they are considered "blank." This is needed when
+all input fields are handled with source functions.
 
 =item B<-v>, B<--debug>
 
@@ -431,8 +450,9 @@ use Encoding::FixLatin qw/ fix_latin /;
 
 my ($input_file, $output_file, $items_file);
 my (@mapping_cli, $date_format, $preview, $config, $help, $man, $loosequotes);
-my ($item_link, $item_split, $lang_file, $tab_sep, $field_sep, $item_field_sep);
-my ($unused_items_report, $liberty_marc, $skip_no_items, $reduce, @reductions);
+my ($item_link, $item_split, $lang_file, $tab_sep, $field_sep, $item_field_sep, $quote_char);
+my ($unused_items_report, $liberty_marc, $skip_no_items, $allow_blank);
+my ($reduce, @reductions, $require_reduce, $reduce_blank);
 my $strict = 1; # strict by default
 my %records;
 my $debug_level = 0;
@@ -458,16 +478,20 @@ GetOptions(
     'tab'               => \$tab_sep,
     'fieldsep=s'        => \$field_sep,
     'itemfieldsep=s'    => \$item_field_sep,
+    'quotechar=s'      => \$quote_char,
     'items|t=s'         => \$items_file,
     'itemlink=s'        => \$item_link,
     'leader=s'          => \$leader,
     'reduce=s'          => \$reduce,
     'skipkoha'          => \$skip_koha,
     'skipnoitems'       => \$skip_no_items,
+    'allowblank'        => \$allow_blank,
     'split|s=i'         => \$item_split,
     'unuseditemsreport=s'   => \$unused_items_report,
     'libertymarc'       => \$liberty_marc,
     'dedupfields'       => \$dedup_fields,
+    'requirereduce'     => \$require_reduce,
+    'reduceblank'       => \$reduce_blank,
     'lang=s'            => \$lang_file,
     'help|h'            => \$help,
     'man'               => \$man,
@@ -486,6 +510,7 @@ pod2usage("An itemlink needs to be supplied if you want an items file.\n") if ($
 pod2usage("An itemlink is useless without an items file.\n") if ($item_link && !$items_file);
 pod2usage("Only one of --tab and --fieldsep can be given at a time.\n") if ($field_sep && $tab_sep);
 pod2usage("The argument given to --fieldsep must be a single character.\n") if ($field_sep && $field_sep ne '\t' && length($field_sep) > 1);
+pod2usage("The argument given to --quotechar must be a single character.\n") if ($quote_char && $quote_char ne '\t' && length($quote_char) > 1);
 pod2usage("The argument given to --itemfieldsep must be a single character.\n") if ($item_field_sep && $item_field_sep ne '\t' && length($item_field_sep) > 1);
 pod2usage("--unuseditemsreport makes no sense if there's no items file. Have you the brain worms?") if ($unused_items_report && !$items_file);
 
@@ -607,6 +632,12 @@ if ($item_field_sep && $item_field_sep eq '\t') {
 	$item_field_sep_char = $field_sep_char;
 }
 
+if ($quote_char && $quote_char eq '\t') {
+    $quote_char = "\t";
+} else {
+    $quote_char ||= '"';
+}
+
 # If we've got an items file to work with, we load it up now.
 my $items_data;
 if ($items_file) {
@@ -620,6 +651,7 @@ my $csv = Text::CSV_XS->new({
         allow_loose_quotes => $loosequotes,
         escape_char => ( $loosequotes ? '' : '"'),
     	sep_char => $field_sep_char,
+        quote_char => $quote_char,
     	auto_diag => 2,
     });
 open my $csvfile, '<', $input_file
@@ -671,6 +703,9 @@ ROW: while (my $row = $csv->getline($csvfile)) {
     $stat_records++;
     $record_count++; # we count from 1 for this
     last if ($preview && $preview < $record_count);
+
+    debug(2, "Processing record $record_count");
+
     my $marc_record;
     my $reducekey = '';
     if (@reductions) {
@@ -679,14 +714,17 @@ ROW: while (my $row = $csv->getline($csvfile)) {
                 $reducekey .= '-' . $row->[$header_to_column{$reduction}];
             }
         }
+        unless (!$require_reduce || $reducekey =~ m/[^- ]/) {
+            warn "Record $record_count has no reduction key, skipping\n";
+            next;
+        }
     }
-    if ($reducekey && $records{$reducekey}) {
+    if (($reducekey || $reduce_blank) && $records{$reducekey}) {
         $marc_record = $records{$reducekey};
     } else {
         $marc_record = MARC::Record->new();
     }
     $marc_record->leader($leader);
-    debug(2, "Processing record $record_count");
     # Check to see if _all_ the fields we're interested in are blank
     # If so, skip record.
     my $is_blank = 1;
@@ -703,7 +741,7 @@ ROW: while (my $row = $csv->getline($csvfile)) {
             last;
         }
     }
-    if ($is_blank) {
+    if ($is_blank && !$allow_blank) {
         warn "Record $record_count is blank, skipping\n";
         next;
     }
@@ -839,9 +877,9 @@ ROW: while (my $row = $csv->getline($csvfile)) {
         }
     }
     if (!$skip_record) {
-        if ($reduce) {
-            $stat_bibsadded++ unless $records{$row->[$header_to_column{$reduce}]};
-            $records{$row->[$header_to_column{$reduce}]} = $marc_record;
+        if ($reducekey) {
+            $stat_bibsadded++ unless $records{$reducekey};
+            $records{$reducekey} = $marc_record;
         } else {
             $stat_bibsadded++;
             dedup_fields($marc_record) if ($dedup_fields);
@@ -883,6 +921,7 @@ sub dedup_fields {
             foreach my $field1 (@fields) {
                 my @fieldscmp = $marc_record->field($tag);
                 my $duplicate;
+                next unless (scalar(@fieldscmp) > 1);
                 foreach my $field2 (@fieldscmp) {
                     next if ($field1 == $field2);
                     if (Data::Dumper::Dumper($field1) eq Data::Dumper::Dumper($field2)) {
