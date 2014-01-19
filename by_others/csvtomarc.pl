@@ -288,6 +288,10 @@ an abort of the whole process. If it's off, that field will be left blank.
 The optional and compulsory markers in the mapping are influenced by the
 setting of this also.
 
+=item B<--quiet>
+
+Do not print a summary at the end of processing.
+
 =item B<-p>, B<--preview>=I<numlines>
 
 If you haven't specified an output file, this will dump the first I<numlines> 
@@ -454,6 +458,7 @@ my ($item_link, $item_split, $lang_file, $tab_sep, $field_sep, $item_field_sep, 
 my ($unused_items_report, $liberty_marc, $skip_no_items, $allow_blank);
 my ($reduce, @reductions, $require_reduce, $reduce_blank);
 my $strict = 1; # strict by default
+my $quiet;
 my %records;
 my $debug_level = 0;
 my $koha_conf = $ENV{KOHA_CONF};
@@ -495,6 +500,7 @@ GetOptions(
     'lang=s'            => \$lang_file,
     'help|h'            => \$help,
     'man'               => \$man,
+    'quiet|q'           => \$quiet
 ) or pod2usage(2);
 
 $marc_format = lc($marc_format);
@@ -654,7 +660,7 @@ my $csv = Text::CSV_XS->new({
         quote_char => $quote_char,
     	auto_diag => 2,
     });
-open my $csvfile, '<', $input_file
+open my $csvfile, '<:encoding(UTF-8)', $input_file
     or die "Unable to open $input_file: $!\n";
 # First get the header line and hashify it.
 my $header_row = $csv->getline($csvfile);
@@ -966,7 +972,7 @@ sub save_record {
 }
 
 save_unused_report();
-print "Records read: $stat_records\tBibs added: $stat_bibsadded\tItems added: $stat_itemsadded\tRecords skipped: $stat_skipped\tItems skipped: $stat_itemsskipped\n";
+print "Records read: $stat_records\tBibs added: $stat_bibsadded\tItems added: $stat_itemsadded\tRecords skipped: $stat_skipped\tItems skipped: $stat_itemsskipped\n" unless $quiet;
 
 sub debug {
     my ($level, $message) = @_;
