@@ -194,12 +194,12 @@ the CSV.
 =item combine
 
 B<combine> allows multiple columns to be mixed together in different ways.  It
-supports the operators B<upto>, B<after>, and B<append>. B<upto> takes the
+supports the operators B<upto>, B<after>, B<append>, and B<text>. B<upto> takes the
 value from the column, up to the supplied string, B<after> takes everything
 after the string, and B<append> appends a string followed by the value from a
 column. For example, B<-m func:combine:upto:;:Source:append: ; :Year> will take
 the Source column up to ';', append ' ; ' to it, and include the value from the
-Year column.
+Year column. B<text> adds a single argument as plain text to the string.
 
 =item ifmatch
 
@@ -1544,6 +1544,8 @@ sub combine_source {
             my $value = $row->[$idx];
             next if !$value;
             $result .= $char . $value;
+        } elsif ($op eq 'text') {
+            $result .= shift @args;
         } else {
         	die "Unknown argument '$op' in '$arg'.\n";
         }
