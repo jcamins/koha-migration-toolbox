@@ -12,7 +12,7 @@ if ($num_args != 3) {
 }
 
 $ENV{ORACLE_SID} = "VGER";
-$ENV{ORACLE_HOME} = "/oracle/app/oracle/product/10.2.0/db_1";
+$ENV{ORACLE_HOME} = "/oracle/app/oracle/product/11.2.0.3/db_1";
 our $db_name = $ARGV[0];
 our $username = $ARGV[1];
 our $password = $ARGV[2];
@@ -57,14 +57,14 @@ my %queries = (
                                  FROM PATRON_ADDRESS
                                  ORDER BY PATRON_ADDRESS.PATRON_ID, PATRON_ADDRESS.ADDRESS_TYPE",
    "06-patron_groups.csv"    => "SELECT patron_barcode.patron_id, patron_barcode.patron_barcode, patron_barcode.barcode_status, 
-                                 patron_barcode.group_id FROM patron_barcode
+                                 patron_barcode.patron_group_id FROM patron_barcode
                                  WHERE patron_barcode.patron_barcode IS NOT NULL",
    "06a-patron_group_names.csv" => "SELECT patron_group.patron_group_id,patron_group.patron_group_name FROM patron_group",
    "07-patron_names_dates.csv" => "SELECT PATRON.PATRON_ID, PATRON.LAST_NAME, PATRON.FIRST_NAME, PATRON.MIDDLE_NAME, PATRON.TITLE, 
                                    PATRON.CREATE_DATE, PATRON.EXPIRE_DATE, PATRON.INSTITUTION_ID
                                    FROM PATRON",
    "08-patron_groups_nulls.csv" => "SELECT patron_barcode.patron_id, patron_barcode.patron_barcode, patron_barcode.barcode_status,
-                                    patron_barcode.group_id FROM patron_barcode
+                                    patron_barcode.patron_group_id FROM patron_barcode
                                     WHERE patron_barcode.patron_barcode IS NULL AND patron_barcode.barcode_status=1",
    "09-patron_notes.csv" => "SELECT patron_notes.patron_id,patron_notes.note FROM patron_notes 
                              order by patron_notes.patron_id,patron_notes.modify_date",
@@ -113,7 +113,7 @@ my %queries = (
                            FROM item_stats JOIN item_stat_code ON (item_stats.item_stat_id = item_stat_code.item_stat_id)",
    "19-ser_component.csv" => "SELECT * FROM component",
    "20-ser_subsc.csv" => "SELECT * FROM subscription",
-   "21-ser_issues.csv" => "SELECT * FROM issues",
+   "21-ser_issues.csv" => "SELECT * FROM serial_issues",
    "22-ser_claim.csv" => "SELECT * FROM serial_claim",
    "23-ser_vendor.csv" => "SELECT * FROM vendor",
    "24-ser_vendaddr.csv" => "SELECT * FROM vendor_address",
@@ -132,7 +132,7 @@ my %queries = (
                          JOIN HOLD_RECALL_ITEMS ON (HOLD_RECALL_ITEMS.HOLD_RECALL_ID = HOLD_RECALL.HOLD_RECALL_ID)
                          JOIN HOLD_RECALL_STATUS ON (HOLD_RECALL_STATUS.HR_STATUS_TYPE = HOLD_RECALL_ITEMS.HOLD_RECALL_STATUS)
                          JOIN PATRON_BARCODE ON (PATRON_BARCODE.PATRON_ID = HOLD_RECALL.PATRON_ID)
-                         JOIN LOCATION ON (LOCATION.LOCATION.ID = HOLD_RECALL.PICKUP_LOCATION)
+                         JOIN LOCATION ON (LOCATION.LOCATION_ID = HOLD_RECALL.PICKUP_LOCATION)
                          JOIN ITEM_BARCODE ON (HOLD_RECALL_ITEMS.ITEM_ID = ITEM_BARCODE.ITEM_ID)
                          ORDER BY HOLD_RECALL_ITEMS.ITEM_ID, HOLD_RECALL_ITEMS.QUEUE_POSITION",
    "29a-locations.csv" => "SELECT location.location_id,location.location_code,location.location_name FROM location"
