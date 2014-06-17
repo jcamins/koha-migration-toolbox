@@ -6,7 +6,7 @@ use DBI;
 $|=1;
 
 $ENV{ORACLE_SID} = "VGER";
-$ENV{ORACLE_HOME} = "/oracle/app/oracle/product/10.2.0/db_1";
+$ENV{ORACLE_HOME} = "/oracle/app/oracle/product/11.2.0.3/db_1";
 our $db_name = "gmcdb";
 our $username = "gmcdb";
 our $password = "Qgmcdb";
